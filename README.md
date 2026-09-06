@@ -133,6 +133,20 @@ wiki init                  # migrate an existing vault: git init, shard the log,
 
 `wiki search` is a finder, not an oracle. It returns pages for the agent to read; there is no model in the loop, so there is nothing to hallucinate. It always runs a full-text ranker (SQLite FTS5, BM25, stemming, title weighted). With Ollama it also ranks by cosine over section-level embeddings and fuses the two lists by reciprocal rank, with each ranker's first choice guaranteed a top-3 slot, so a page both rankers like rises to the top and a rare exact token still surfaces when only full-text search can see it. The first line of its output says which mode ran (`hybrid`, `semantic`, or `lexical`) and whether coverage is partial.
 
+### Does it beat grepping the vault by hand?
+
+Measured on the author's vault: 465 pages, 3,030 embedded sections, 15 questions with known answer pages, phrased the way a person asks rather than the way the page is worded.
+
+| Method | Top 1 | Top 3 | Top 8 | Mean reciprocal rank | Latency | Candidates handed to the agent |
+|---|---|---|---|---|---|---|
+| grep by hand, ranked generously | 8/15 | 11/15 | 14/15 | 0.67 | 2.6 s | median 123 files, unranked, no snippets |
+| `wiki search`, lexical only | 6/15 | 9/15 | 13/15 | 0.56 | 37 ms | 8 ranked pages with snippets |
+| `wiki search`, hybrid | 8/15 | 14/15 | 15/15 | 0.73 | 0.5 s | 8 ranked pages with the matching section |
+
+Read the grep row kindly: it was given a ranking by keyword overlap that a real `rg -l` does not produce. What an agent actually gets from grep is the last column. Where hybrid wins outright is paraphrase: "the company slogan about processing video locally" ranked 1 versus 7 for grep, "who is the outside writer" 2 versus 18. Where grep still wins is a rare exact token you already know, which is why the fusion guarantees the full-text ranker's first choice a top-3 slot.
+
+Fifteen questions on one private vault is evidence, not proof. Run it on yours: `agent/bench/search_bench.py` takes a YAML file of questions, keywords, and answer pages, builds a throwaway index, and prints the same table. See [agent/bench/questions.example.yaml](agent/bench/questions.example.yaml).
+
 The index is the one file in the vault that is generated rather than written, so the agent never has to keep a catalog by hand and a sync client can never corrupt an in-place edit of it. Design notes in [docs/agent-design.md](docs/agent-design.md).
 
 ## Repository layout

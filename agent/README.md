@@ -20,7 +20,28 @@ wiki init                  # one-time migration of an existing vault: git init, 
 | `semantic` | embeddings available but the query is all stopwords | cosine over `##`-section chunks (`nomic-embed-text`), best section per page |
 | `lexical` | no embedder, or nothing embedded yet | SQLite FTS5 with BM25, Porter stemming, title weighted 5x; falls back to disk parsing only if the sqlite build lacks FTS5 |
 
-The first output line names the mode and warns when only part of the vault is embedded. Measured on a 465-page vault with fifteen questions: hybrid put the right page in the top 8 for 15 of 15 (top 3 for 14) with a mean reciprocal rank of 0.73; grep-by-hand with well-chosen keywords managed 14 and 11 at 0.67, and returned a median of 123 candidate files per question with no ranking or snippets. Lexical alone answers in about 60 ms. Coverage can be partial on purpose: if Ollama is down during a reindex, unchanged pages keep their embeddings and changed pages drop theirs until the next reindex.
+The first output line names the mode and warns when only part of the vault is embedded.
+
+## Benchmark
+
+Measured on the author's vault (465 pages, 3,030 sections, 15 questions with known answers):
+
+| Method | Top 1 | Top 3 | Top 8 | Mean reciprocal rank | Latency | Candidates handed to the agent |
+|---|---|---|---|---|---|---|
+| grep by hand, ranked generously | 8/15 | 11/15 | 14/15 | 0.67 | 2.6 s | median 123 files, unranked, no snippets |
+| `wiki search`, lexical only | 6/15 | 9/15 | 13/15 | 0.56 | 37 ms | 8 ranked pages with snippets |
+| `wiki search`, hybrid | 8/15 | 14/15 | 15/15 | 0.73 | 0.5 s | 8 ranked pages with the matching section |
+
+The grep row is generous: it ranks files by keyword overlap, which a real `rg -l` does not. Semantic alone scored 14/15 top-3 and 0.70; the hybrid's per-ranker top-1 guarantee is what recovers the one page only BM25 could see (an exact token buried in a long section), and a 24-cell parameter sweep showed the RRF constant barely matters.
+
+Run it on your own vault. Write a questions file (see `bench/questions.example.yaml`), then:
+
+```
+python bench/search_bench.py my-questions.yaml            # uses your configured vault
+python bench/search_bench.py my-questions.yaml --vault ~/other-vault -k 5
+```
+
+It builds a throwaway index in a temp dir, so your real cache is untouched. The grep column needs [ripgrep](https://github.com/BurntSushi/ripgrep); the hybrid column needs Ollama. Coverage can be partial on purpose: if Ollama is down during a reindex, unchanged pages keep their embeddings and changed pages drop theirs until the next reindex.
 
 ## Setup
 

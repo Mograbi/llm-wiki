@@ -1,0 +1,8 @@
+# One entry per question. `keywords` = what you would grep for by hand.
+# `answers` = vault-relative paths that count as a correct hit (any one of them).
+- question: How does the pattern keep bookkeeping cheap?
+  keywords: [bookkeeping, bottleneck]
+  answers: [entities/llm-wiki-pattern.md]
+- question: Where did the idea for this vault come from?
+  keywords: [Karpathy, gist]
+  answers: [sources/karpathy-llm-wiki.md]
