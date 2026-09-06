@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from .fsutil import is_regular_file_inside
+from .fsutil import is_plain_file
 
 CONTENT_DIRS = ("sources", "entities", "queries", "projects", "people")
 
@@ -126,14 +126,16 @@ def _salvage_frontmatter(block: str) -> dict:
     return out
 
 
-def content_pages(vault: Path) -> list[str]:
-    """Vault-relative paths of all content pages (not _meta, not loose files).
+def scan_pages(vault: Path) -> tuple[list[str], list[str]]:
+    """One walk of the content folders -> (pages, skipped).
 
     Recurses into subfolders, skipping dot-directories (.obsidian, .trash, .git).
-    Symlinks, FIFOs and anything that resolves outside the vault are ignored: a
-    cloned or synced vault may contain links to places it has no business reading.
+    Symlinks and special files are skipped and reported: a cloned or synced vault
+    may contain links to places it has no business reading. rglob does not follow
+    directory symlinks, so a plain file found here is inside the vault.
     """
-    out = []
+    pages: list[str] = []
+    skipped: list[str] = []
     for d in CONTENT_DIRS:
         base = vault / d
         if not base.is_dir():
@@ -142,24 +144,15 @@ def content_pages(vault: Path) -> list[str]:
             rel = p.relative_to(vault)
             if any(part.startswith(".") for part in rel.parts):
                 continue
-            if not is_regular_file_inside(p, vault):
-                continue
-            out.append(rel.as_posix())
-    return sorted(out)
+            (pages if is_plain_file(p) else skipped).append(rel.as_posix())
+    return sorted(pages), sorted(skipped)
+
+
+def content_pages(vault: Path) -> list[str]:
+    """Vault-relative paths of all content pages (not _meta, not loose files)."""
+    return scan_pages(vault)[0]
 
 
 def skipped_pages(vault: Path) -> list[str]:
-    """Content .md entries that content_pages() refused: symlinks, special files,
-    escapes. Reported so a user learns why a page is missing from the index."""
-    out = []
-    for d in CONTENT_DIRS:
-        base = vault / d
-        if not base.is_dir():
-            continue
-        for p in base.rglob("*.md"):
-            rel = p.relative_to(vault)
-            if any(part.startswith(".") for part in rel.parts):
-                continue
-            if not is_regular_file_inside(p, vault):
-                out.append(rel.as_posix())
-    return sorted(out)
+    """Content .md entries that content_pages() refused (symlinks, special files)."""
+    return scan_pages(vault)[1]

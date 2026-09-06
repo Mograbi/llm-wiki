@@ -12,13 +12,24 @@ class UnsafePath(Exception):
     """A path inside the vault is a symlink or otherwise not a plain file."""
 
 
-def is_regular_file_inside(path: Path, root: Path) -> bool:
-    """True for a plain (non-symlink, non-FIFO) file whose real location is under root."""
+def is_plain_file(path: Path) -> bool:
+    """True for a regular file reached without a symlink at its final component.
+
+    Callers walk the tree with a non-following rglob, so a plain file found that
+    way is inside the vault by construction; no resolve() round-trip is needed
+    (resolve() is a syscall per path component and dominates on network mounts).
+    """
     try:
         st = path.lstat()
     except OSError:
         return False
-    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+    return not stat.S_ISLNK(st.st_mode) and stat.S_ISREG(st.st_mode)
+
+
+def is_regular_file_inside(path: Path, root: Path) -> bool:
+    """Stricter, slower check: plain file AND resolves under root. Used in tests
+    and anywhere a path did not come from our own walk."""
+    if not is_plain_file(path):
         return False
     try:
         return path.resolve().is_relative_to(root.resolve())

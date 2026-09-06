@@ -25,8 +25,8 @@ from pathlib import Path
 from typing import Protocol
 
 from .fsutil import UnsafePath, rename_nofollow, write_text_nofollow
-from .vault import (MAX_PAGE_BYTES, content_pages, normalize_target, parse_page,
-                    scalar, scalar_list, skipped_pages)
+from .vault import (MAX_PAGE_BYTES, normalize_target, parse_page, scalar, scalar_list,
+                    scan_pages)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS pages (
@@ -133,7 +133,7 @@ def build_index(vault: Path, db_path: Path, embedder: Embedder | None = None) ->
                    (embedder.identity,))
 
     known = {r["path"]: (r["hash"], r["stat"]) for r in db.execute("SELECT path, hash, stat FROM pages")}
-    current = content_pages(vault)
+    current, skipped = scan_pages(vault)
 
     removed = set(known) - set(current)
     for path in removed:
@@ -214,7 +214,7 @@ def build_index(vault: Path, db_path: Path, embedder: Embedder | None = None) ->
     cov = coverage(db)
     db.close()
     return {"updated": updated, "removed": len(removed), "embedded": embedded, "coverage": cov,
-            "oversized": oversized, "skipped": skipped_pages(vault)}
+            "oversized": oversized, "skipped": skipped}
 
 
 def seconds_since_sync(db_path: Path) -> float | None:
