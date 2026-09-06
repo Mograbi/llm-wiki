@@ -3,29 +3,29 @@
 import pytest
 
 PAGES = {
-    "entities/frp-reverse-tunnel.md": """---
+    "entities/relay-tunnel.md": """---
 type: entity
 projects: [acme]
-related: ["[[envoy-proxy]]"]
-sources: ["[[gpu-box-access-2026-08-26]]"]
+related: ["[[edge-gateway]]"]
+sources: ["[[build-box-access-2026-08-26]]"]
 status: active
 updated: 2026-08-25
 tags: [edge]
 ---
 
-# FRP reverse tunnel
+# Relay tunnel
 
-Product name is Device VPN. Fronted by [[envoy-proxy]].
+Product name is Device Relay. Fronted by [[edge-gateway]].
 
 ## Retry behavior
 
-Three layers, none retries a device login. See [[msgs-service]].
+Three layers, none retries a device login. See [[control-service]].
 
 ## Teardown timers
 
 Idle 120s, hard ceiling 20 min.
 """,
-    "entities/envoy-proxy.md": """---
+    "entities/edge-gateway.md": """---
 type: entity
 projects: [acme]
 status: active
@@ -33,11 +33,11 @@ updated: 2026-07-01
 tags: [edge]
 ---
 
-# Envoy proxy
+# Edge gateway
 
 TLS front for edge services.
 """,
-    "entities/msgs-service.md": """---
+    "entities/control-service.md": """---
 type: entity
 projects: [acme]
 status: active
@@ -45,35 +45,35 @@ updated: 2026-08-01
 tags: [edge]
 ---
 
-# msgs service
+# control service
 
-MQTT + network config. Talks to [[envoy-proxy]].
+Message bus + network config. Talks to [[edge-gateway]].
 """,
-    "sources/gpu-box-access-2026-08-26.md": """---
+    "sources/build-box-access-2026-08-26.md": """---
 type: source
 source_type: conversation
 ingested: 2026-08-26
 projects: [acme]
-entities: ["[[frp-reverse-tunnel]]"]
+entities: ["[[relay-tunnel]]"]
 status: summarized
 tags: [infra]
 ---
 
-# GPU box access
+# Build box access
 
-Recovered SSH access to the shared GPU box.
+Recovered SSH access to the shared build box.
 """,
-    "queries/device-vpn-auto-login.md": """---
+    "queries/device-relay-auto-login.md": """---
 type: query
 asked: 2026-08-25
 projects: [acme]
-entities: ["[[frp-reverse-tunnel]]"]
+entities: ["[[relay-tunnel]]"]
 sources_used: []
 ---
 
-# Device VPN auto-login?
+# Device Relay auto-login?
 
-No auto-login; transport-only. [[frp-reverse-tunnel]] is the mechanism.
+No auto-login; transport-only. [[relay-tunnel]] is the mechanism.
 """,
 }
 

@@ -52,11 +52,11 @@ Clone somewhere permanent. `install.sh` symlinks into the checkout rather than c
 4. generate the first `_meta/index.md`,
 5. symlink the skill into `~/.claude/skills/llm-wiki` (Claude Code) and print the Cursor instructions.
 
-Pointing it at a vault that already exists leaves the contents alone and tells you to run `wiki init`, which migrates it safely: a hand-written index is archived, not overwritten.
+Pointing it at a vault that already exists leaves the contents alone and tells you to run `wiki init`, which migrates it safely: a hand-written index is archived, not overwritten. Pointing it at a non-empty directory that is not a vault is refused, so it can never git-commit a folder you did not mean it to.
 
 Then open your agent and say: *"ingest this"* with a link, a file, or a pasted conversation.
 
-No API keys are needed beyond the agent you already use. The CLI is offline and has one dependency. Semantic search is an opt-in: install [Ollama](https://ollama.com/download), run `ollama pull nomic-embed-text`, then `wiki reindex`. Without it, `wiki search` runs full-text BM25 ranking alone and says so.
+No API keys are needed beyond the agent you already use. The CLI has one dependency and makes no network calls except to your own local Ollama, if you enable it. Threat model in [SECURITY.md](SECURITY.md). Semantic search is an opt-in: install [Ollama](https://ollama.com/download), run `ollama pull nomic-embed-text`, then `wiki reindex`. Without it, `wiki search` runs full-text BM25 ranking alone and says so.
 
 <details>
 <summary>What a page and the generated index actually look like</summary>

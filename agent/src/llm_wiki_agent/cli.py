@@ -16,7 +16,8 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import config
-from .embed import OllamaEmbedder, get_embedder
+from .embed import EmbedderError, OllamaEmbedder, get_embedder
+from .fsutil import UnsafePath, write_text_nofollow
 from .index import build_index, generate_index_md, seconds_since_sync
 from .migrate import LogParseError, shard_log
 from .search import search
@@ -49,6 +50,13 @@ def ensure_cache() -> None:
         probe.unlink()
     except OSError as e:
         raise CliError(f"cache directory {path} is not writable ({e.strerror})") from e
+
+
+def report_skips(stats: dict) -> None:
+    for rel in stats.get("skipped", []):
+        print(f"skipped: {rel} (symlink, special file, or points outside the vault)")
+    for rel in stats.get("oversized", []):
+        print(f"skipped: {rel} (over 2 MB; split it or move it out of the content folders)")
 
 
 def embedding_status(embedder, stats: dict) -> str:
@@ -91,8 +99,8 @@ def cmd_init(vault: Path) -> int:
         git(vault, "init", "-q")
         git(vault, "config", "core.autocrlf", "false")
         gi = vault / ".gitignore"
-        if not gi.exists():
-            gi.write_text("~$*\n*.tmp\n.obsidian/workspace*\n", encoding="utf-8")
+        if not gi.exists() and not gi.is_symlink():
+            write_text_nofollow(gi, "~$*\n*.tmp\n.obsidian/workspace*\n")
         print("git: initialized")
     else:
         print("git: already initialized")
@@ -133,6 +141,7 @@ def cmd_init(vault: Path) -> int:
     if index.archived:
         print(f"index: hand-written index.md archived to {index.archived.relative_to(vault)}")
     print(f"index: {stats['updated']} pages indexed, _meta/index.md regenerated")
+    report_skips(stats)
     if index.untyped:
         print(f"index: {index.untyped} pages have no recognized `type:`"
               " — listed under '## Other'")
@@ -161,6 +170,7 @@ def cmd_reindex(vault: Path, full: bool) -> int:
         print(f"index: hand-written index.md archived to {index.archived.relative_to(vault)}")
     print(f"reindexed: {stats['updated']} changed, {stats['removed']} removed, "
           f"{stats['embedded']} embedded")
+    report_skips(stats)
     if index.untyped:
         print(f"note: {index.untyped} pages have no recognized `type:`"
               " — listed under '## Other'")
@@ -235,7 +245,7 @@ def main(argv=None) -> int:
         cmd = " ".join(str(a) for a in e.cmd)
         print(f"error: command failed ({e.returncode}): {cmd}", file=sys.stderr)
         return 1
-    except (CliError, OSError, sqlite3.Error) as e:
+    except (CliError, UnsafePath, EmbedderError, OSError, sqlite3.Error) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 

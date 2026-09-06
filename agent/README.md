@@ -37,11 +37,11 @@ Optional semantic search: install [Ollama](https://ollama.com/download), then `o
 | `WIKI_CACHE` | `~/.cache/llm-wiki` | disposable sqlite index; delete any time. Change detection is mtime+size first, content hash second |
 
 `wiki search` re-scans the vault for changes at most once every five minutes; pass `--sync` to force it. `wiki reindex` always scans.
-| `WIKI_OLLAMA_URL` | `http://localhost:11434` | embedder endpoint |
+| `WIKI_OLLAMA_URL` | `http://localhost:11434` | embedder endpoint; loopback only unless `WIKI_OLLAMA_ALLOW_REMOTE=1` |
 | `WIKI_EMBED_MODEL` | `nomic-embed-text` | embedding model; changing it re-embeds everything |
 | `WIKI_NO_EMBED` | unset | set to `1` to never try the embedder |
 
-No API keys, no network beyond your own Ollama. One dependency (`pyyaml`).
+No API keys. The only network call is to the embedder at `WIKI_OLLAMA_URL`, which must be a loopback address unless you set `WIKI_OLLAMA_ALLOW_REMOTE=1`, because every page section is sent there. One dependency (`pyyaml`). See [SECURITY.md](../SECURITY.md) for the threat model.
 
 ## Tests
 

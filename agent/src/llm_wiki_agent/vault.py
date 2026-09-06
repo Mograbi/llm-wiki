@@ -11,9 +11,16 @@ from pathlib import Path
 
 import yaml
 
+from .fsutil import is_regular_file_inside
+
 CONTENT_DIRS = ("sources", "entities", "queries", "projects", "people")
 
-WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]")
+# Bounded and newline-free so a page full of "[[" cannot make matching quadratic.
+WIKILINK_RE = re.compile(r"\[\[([^\[\]|#\n]{1,200})(?:[#|][^\[\]\n]{0,200})?\]\]")
+MAX_PAGE_BYTES = 2 * 1024 * 1024      # larger pages are skipped with a warning
+MAX_FRONTMATTER_BYTES = 64 * 1024     # larger frontmatter is treated as malformed
+MAX_FIELD_CHARS = 300                 # stored frontmatter scalars are truncated
+MAX_LIST_ITEMS = 50
 H1_RE = re.compile(r"^# (.+)$", re.MULTILINE)
 SECTION_RE = re.compile(r"^## (.+)$", re.MULTILINE)
 
@@ -56,21 +63,46 @@ def normalize_target(target: str) -> str:
 
 
 def parse_page(vault: Path, rel: str) -> Page:
-    raw = (vault / rel).read_text(encoding="utf-8")
+    raw = (vault / rel).read_text(encoding="utf-8", errors="replace")
     frontmatter: dict = {}
     body = raw
     if raw.startswith("---\n"):
         end = raw.find("\n---\n", 4)
         if end != -1:
             block = raw[4:end]
-            try:
-                frontmatter = yaml.safe_load(block) or {}
-            except yaml.YAMLError:
-                frontmatter = _salvage_frontmatter(block)
+            if len(block) > MAX_FRONTMATTER_BYTES:
+                frontmatter = {}
+            else:
+                try:
+                    frontmatter = yaml.safe_load(block) or {}
+                except yaml.YAMLError:
+                    frontmatter = _salvage_frontmatter(block)
             body = raw[end + 5:]
     if not isinstance(frontmatter, dict):
         frontmatter = {}
     return Page(path=rel, frontmatter=frontmatter, body=body, raw=raw)
+
+
+def scalar(value) -> str | None:
+    """A frontmatter value as a bounded string, or None if it is not a scalar.
+    Lists, dicts and YAML alias trees never reach the index as text."""
+    if value is None or isinstance(value, (dict, list, tuple, set)):
+        return None
+    return str(value)[:MAX_FIELD_CHARS]
+
+
+def scalar_list(value) -> list[str]:
+    """A frontmatter list of scalars, bounded in length and item size."""
+    if isinstance(value, (str, int, float)):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    out = []
+    for item in value[:MAX_LIST_ITEMS]:
+        s = scalar(item)
+        if s:
+            out.append(s)
+    return out
 
 
 KV_RE = re.compile(r"^(\w+):\s*(.*)$")
@@ -98,6 +130,8 @@ def content_pages(vault: Path) -> list[str]:
     """Vault-relative paths of all content pages (not _meta, not loose files).
 
     Recurses into subfolders, skipping dot-directories (.obsidian, .trash, .git).
+    Symlinks, FIFOs and anything that resolves outside the vault are ignored: a
+    cloned or synced vault may contain links to places it has no business reading.
     """
     out = []
     for d in CONTENT_DIRS:
@@ -108,5 +142,24 @@ def content_pages(vault: Path) -> list[str]:
             rel = p.relative_to(vault)
             if any(part.startswith(".") for part in rel.parts):
                 continue
+            if not is_regular_file_inside(p, vault):
+                continue
             out.append(rel.as_posix())
+    return sorted(out)
+
+
+def skipped_pages(vault: Path) -> list[str]:
+    """Content .md entries that content_pages() refused: symlinks, special files,
+    escapes. Reported so a user learns why a page is missing from the index."""
+    out = []
+    for d in CONTENT_DIRS:
+        base = vault / d
+        if not base.is_dir():
+            continue
+        for p in base.rglob("*.md"):
+            rel = p.relative_to(vault)
+            if any(part.startswith(".") for part in rel.parts):
+                continue
+            if not is_regular_file_inside(p, vault):
+                out.append(rel.as_posix())
     return sorted(out)

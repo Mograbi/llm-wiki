@@ -19,12 +19,12 @@ def test_pages_rows_from_frontmatter(mini_vault, tmp_path):
     db = open_db(db_path)
     rows = {r["path"]: r for r in db.execute("SELECT * FROM pages").fetchall()}
     assert len(rows) == 5
-    frp = rows["entities/frp-reverse-tunnel.md"]
-    assert frp["type"] == "entity"
-    assert frp["projects"] == "acme"
-    assert frp["title"] == "FRP reverse tunnel"
-    assert frp["updated"] == "2026-08-25"
-    assert rows["queries/device-vpn-auto-login.md"]["type"] == "query"
+    tunnel = rows["entities/relay-tunnel.md"]
+    assert tunnel["type"] == "entity"
+    assert tunnel["projects"] == "acme"
+    assert tunnel["title"] == "Relay tunnel"
+    assert tunnel["updated"] == "2026-08-25"
+    assert rows["queries/device-relay-auto-login.md"]["type"] == "query"
 
 
 def test_link_graph_both_directions(mini_vault, tmp_path):
@@ -32,16 +32,16 @@ def test_link_graph_both_directions(mini_vault, tmp_path):
     build_index(mini_vault, db_path)
     db = open_db(db_path)
     out = {r["dst"] for r in db.execute(
-        "SELECT dst FROM links WHERE src = ?", ("entities/frp-reverse-tunnel.md",))}
-    assert out == {"envoy-proxy", "gpu-box-access-2026-08-26", "msgs-service"}
-    inbound = {r["src"] for r in db.execute("SELECT src FROM links WHERE dst = ?", ("envoy-proxy",))}
-    assert inbound == {"entities/frp-reverse-tunnel.md", "entities/msgs-service.md"}
+        "SELECT dst FROM links WHERE src = ?", ("entities/relay-tunnel.md",))}
+    assert out == {"edge-gateway", "build-box-access-2026-08-26", "control-service"}
+    inbound = {r["src"] for r in db.execute("SELECT src FROM links WHERE dst = ?", ("edge-gateway",))}
+    assert inbound == {"entities/relay-tunnel.md", "entities/control-service.md"}
 
 
 def test_incremental_reparses_only_changed(mini_vault, tmp_path):
     db_path = tmp_path / "index.db"
     assert build_index(mini_vault, db_path)["updated"] == 5
-    page = mini_vault / "entities/envoy-proxy.md"
+    page = mini_vault / "entities/edge-gateway.md"
     page.write_text(page.read_text().replace("TLS front", "mTLS front"), encoding="utf-8")
     assert build_index(mini_vault, db_path)["updated"] == 1
     assert build_index(mini_vault, db_path)["updated"] == 0
@@ -50,13 +50,13 @@ def test_incremental_reparses_only_changed(mini_vault, tmp_path):
 def test_deleted_page_rows_removed(mini_vault, tmp_path):
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path)
-    (mini_vault / "queries/device-vpn-auto-login.md").unlink()
+    (mini_vault / "queries/device-relay-auto-login.md").unlink()
     stats = build_index(mini_vault, db_path)
     assert stats["removed"] == 1
     db = open_db(db_path)
     assert counts(db)["pages"] == 4
     assert db.execute("SELECT COUNT(*) FROM links WHERE src = ?",
-                      ("queries/device-vpn-auto-login.md",)).fetchone()[0] == 0
+                      ("queries/device-relay-auto-login.md",)).fetchone()[0] == 0
 
 
 def test_generate_index_md_groups_by_type_with_inbound_counts(mini_vault, tmp_path):
@@ -68,8 +68,8 @@ def test_generate_index_md_groups_by_type_with_inbound_counts(mini_vault, tmp_pa
     assert "## Entities (3)" in text
     assert "## Sources (1)" in text
     assert "## Queries (1)" in text
-    # envoy-proxy is linked from two pages
-    assert "- [[envoy-proxy]] — Envoy proxy [acme] (2←)" in text
+    # edge-gateway is linked from two pages
+    assert "- [[edge-gateway]] — Edge gateway [acme] (2←)" in text
 
 
 def test_untyped_pages_land_under_other(mini_vault, tmp_path):
@@ -152,16 +152,16 @@ def test_sections_are_embedded_per_page(mini_vault, tmp_path):
     stats = build_index(mini_vault, db_path, FakeEmbedder())
     assert stats["embedded"] == 5 and stats["coverage"] == (5, 5)
     db = open_db(db_path)
-    assert chunk_sections(db, "entities/frp-reverse-tunnel.md") == \
+    assert chunk_sections(db, "entities/relay-tunnel.md") == \
         ["", "Retry behavior", "Teardown timers"]
-    assert chunk_sections(db, "entities/envoy-proxy.md") == [""]
+    assert chunk_sections(db, "entities/edge-gateway.md") == [""]
 
 
 def test_only_changed_pages_are_reembedded(mini_vault, tmp_path):
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path, FakeEmbedder())
     fake = FakeEmbedder()
-    page = mini_vault / "entities/envoy-proxy.md"
+    page = mini_vault / "entities/edge-gateway.md"
     page.write_text(page.read_text().replace("TLS front", "mTLS front"), encoding="utf-8")
     assert build_index(mini_vault, db_path, fake)["embedded"] == 1
     assert "mTLS front" in fake.embedded_texts[0]
@@ -172,14 +172,14 @@ def test_no_embedder_keeps_old_chunks_but_drops_stale_ones(mini_vault, tmp_path)
     """Ollama being down must not wipe the index; it must only stop lying."""
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path, FakeEmbedder())
-    page = mini_vault / "entities/envoy-proxy.md"
+    page = mini_vault / "entities/edge-gateway.md"
     page.write_text(page.read_text() + "\nnew line\n", encoding="utf-8")
     stats = build_index(mini_vault, db_path, None)
     assert stats["embedded"] == 0
     assert stats["coverage"] == (4, 5)          # the changed page lost its chunks
     db = open_db(db_path)
-    assert chunk_sections(db, "entities/envoy-proxy.md") == []
-    assert chunk_sections(db, "entities/frp-reverse-tunnel.md")  # untouched page kept
+    assert chunk_sections(db, "entities/edge-gateway.md") == []
+    assert chunk_sections(db, "entities/relay-tunnel.md")  # untouched page kept
 
 
 def test_embedder_returning_later_fills_the_gaps(mini_vault, tmp_path):
@@ -198,10 +198,10 @@ def test_changing_the_embedding_model_reembeds_everything(mini_vault, tmp_path):
 def test_deleted_page_drops_its_chunks(mini_vault, tmp_path):
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path, FakeEmbedder())
-    (mini_vault / "queries/device-vpn-auto-login.md").unlink()
+    (mini_vault / "queries/device-relay-auto-login.md").unlink()
     build_index(mini_vault, db_path, FakeEmbedder())
     db = open_db(db_path)
-    assert chunk_sections(db, "queries/device-vpn-auto-login.md") == []
+    assert chunk_sections(db, "queries/device-relay-auto-login.md") == []
 
 
 # -- fts + change detection -----------------------------------------------------
@@ -211,7 +211,7 @@ def test_fts_rows_follow_pages(mini_vault, tmp_path):
     build_index(mini_vault, db_path)
     db = open_db(db_path)
     assert db.execute("SELECT COUNT(*) FROM pages_fts").fetchone()[0] == 5
-    (mini_vault / "queries/device-vpn-auto-login.md").unlink()
+    (mini_vault / "queries/device-relay-auto-login.md").unlink()
     build_index(mini_vault, db_path)
     db = open_db(db_path)
     assert db.execute("SELECT COUNT(*) FROM pages_fts").fetchone()[0] == 4
@@ -244,7 +244,7 @@ def test_touched_but_identical_file_is_not_counted_as_updated(mini_vault, tmp_pa
     import os, time
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path)
-    page = mini_vault / "entities/envoy-proxy.md"
+    page = mini_vault / "entities/edge-gateway.md"
     future = time.time() + 100
     os.utime(page, (future, future))
     assert build_index(mini_vault, db_path)["updated"] == 0

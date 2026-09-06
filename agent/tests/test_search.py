@@ -12,7 +12,7 @@ def test_hybrid_ranks_the_page_whose_section_matches(mini_vault, tmp_path):
     build_index(mini_vault, db_path, emb)
     result = search(mini_vault, db_path, "retry behavior teardown timers", emb, k=3)
     assert result.mode == "hybrid"
-    assert result.hits[0].path == "entities/frp-reverse-tunnel.md"
+    assert result.hits[0].path == "entities/relay-tunnel.md"
     assert result.hits[0].section in ("Retry behavior", "Teardown timers")
     assert result.note == ""
 
@@ -40,7 +40,7 @@ def test_lexical_fallback_when_no_embedder(mini_vault, tmp_path):
     result = search(mini_vault, db_path, "teardown timers", None)
     assert result.mode == "lexical"
     assert "semantic search off" in result.note
-    assert result.hits[0].path == "entities/frp-reverse-tunnel.md"
+    assert result.hits[0].path == "entities/relay-tunnel.md"
     assert "Teardown" in result.hits[0].snippet or "teardown" in result.hits[0].snippet.lower()
 
 
@@ -48,30 +48,30 @@ def test_lexical_fallback_when_nothing_embedded_yet(mini_vault, tmp_path):
     """Embedder reachable but reindex never ran with it: say so, still answer."""
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path, None)
-    result = search(mini_vault, db_path, "envoy", FakeEmbedder())
+    result = search(mini_vault, db_path, "gateway", FakeEmbedder())
     assert result.mode == "lexical"
     assert "run `wiki reindex`" in result.note
-    assert result.hits[0].path == "entities/envoy-proxy.md"
+    assert result.hits[0].path == "entities/edge-gateway.md"
 
 
 def test_lexical_weights_title_matches(mini_vault, tmp_path):
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path, None)
-    result = search(mini_vault, db_path, "envoy proxy", None)
-    assert result.hits[0].path == "entities/envoy-proxy.md"
+    result = search(mini_vault, db_path, "edge gateway", None)
+    assert result.hits[0].path == "entities/edge-gateway.md"
 
 
 def test_lexical_respects_project_filter(mini_vault, tmp_path):
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path, None)
-    assert search(mini_vault, db_path, "envoy", None, project="other").hits == []
+    assert search(mini_vault, db_path, "gateway", None, project="other").hits == []
 
 
 def test_partial_coverage_is_reported(mini_vault, tmp_path):
     db_path = tmp_path / "index.db"
     emb = FakeEmbedder()
     build_index(mini_vault, db_path, emb)
-    page = mini_vault / "entities/envoy-proxy.md"
+    page = mini_vault / "entities/edge-gateway.md"
     page.write_text(page.read_text() + "\nchanged\n", encoding="utf-8")
     build_index(mini_vault, db_path, None)          # embedder down: 4/5 remain
     result = search(mini_vault, db_path, "retry", emb)
@@ -93,7 +93,7 @@ def test_lexical_ignores_question_words(mini_vault, tmp_path):
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path, None)
     result = search(mini_vault, db_path, "what happens to the teardown timers while idle", None)
-    assert result.hits[0].path == "entities/frp-reverse-tunnel.md"
+    assert result.hits[0].path == "entities/relay-tunnel.md"
     assert "entities/chatty.md" not in [h.path for h in result.hits]
 
 
@@ -104,7 +104,7 @@ def test_lexical_uses_fts_with_stemming(mini_vault, tmp_path):
     for q in ("retrying a login", "teardown timer"):
         result = search(mini_vault, db_path, q, None)
         assert result.mode == "lexical"
-        assert result.hits[0].path == "entities/frp-reverse-tunnel.md", q
+        assert result.hits[0].path == "entities/relay-tunnel.md", q
 
 
 def test_lexical_handles_punctuated_tokens(mini_vault, tmp_path):

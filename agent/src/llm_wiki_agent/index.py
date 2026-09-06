@@ -24,7 +24,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from .vault import content_pages, normalize_target, parse_page
+from .fsutil import UnsafePath, rename_nofollow, write_text_nofollow
+from .vault import (MAX_PAGE_BYTES, content_pages, normalize_target, parse_page,
+                    scalar, scalar_list, skipped_pages)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS pages (
@@ -147,9 +149,17 @@ def build_index(vault: Path, db_path: Path, embedder: Embedder | None = None) ->
 
     updated = 0
     embedded = 0
+    oversized: list[str] = []
     for rel in current:
         file = vault / rel
         stat = _stat(file)
+        if int(stat.rsplit(":", 1)[1]) > MAX_PAGE_BYTES:
+            oversized.append(rel)
+            for table, col in (("pages", "path"), ("links", "src"), ("chunks", "page")):
+                db.execute(f"DELETE FROM {table} WHERE {col} = ?", (rel,))
+            if has_fts(db):
+                db.execute("DELETE FROM pages_fts WHERE path = ?", (rel,))
+            continue
         old_hash, old_stat = known.get(rel, (None, None))
         needs_embed_missing = embedder is not None and (reembed_all or rel not in have_chunks)
         needs_fts_missing = rel not in have_fts
@@ -174,9 +184,6 @@ def build_index(vault: Path, db_path: Path, embedder: Embedder | None = None) ->
         if not changed:
             continue
         fm = page.frontmatter
-        projects = fm.get("projects") or []
-        if isinstance(projects, str):
-            projects = [projects]
         db.execute(
             "INSERT OR REPLACE INTO pages (path, hash, stat, type, title, projects, updated, status)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -184,11 +191,11 @@ def build_index(vault: Path, db_path: Path, embedder: Embedder | None = None) ->
                 rel,
                 digest,
                 stat,
-                fm.get("type"),
-                page.title,
-                ",".join(str(p) for p in projects),
-                str(fm.get("updated") or fm.get("ingested") or fm.get("asked") or ""),
-                fm.get("status"),
+                scalar(fm.get("type")),
+                page.title[:300],
+                ",".join(scalar_list(fm.get("projects"))),
+                scalar(fm.get("updated") or fm.get("ingested") or fm.get("asked")) or "",
+                scalar(fm.get("status")),
             ),
         )
         db.execute("DELETE FROM links WHERE src = ?", (rel,))
@@ -206,7 +213,8 @@ def build_index(vault: Path, db_path: Path, embedder: Embedder | None = None) ->
     db.commit()
     cov = coverage(db)
     db.close()
-    return {"updated": updated, "removed": len(removed), "embedded": embedded, "coverage": cov}
+    return {"updated": updated, "removed": len(removed), "embedded": embedded, "coverage": cov,
+            "oversized": oversized, "skipped": skipped_pages(vault)}
 
 
 def seconds_since_sync(db_path: Path) -> float | None:
@@ -258,6 +266,8 @@ class IndexResult:
 def _archive_handwritten_index(vault: Path) -> Path | None:
     """Never overwrite an index.md a human wrote. Move it aside first."""
     target = vault / "_meta" / "index.md"
+    if target.is_symlink():
+        raise UnsafePath(f"refusing to touch symlink: {target}")
     if not target.exists():
         return None
     if GENERATED_MARKER in target.read_text(encoding="utf-8")[:400]:
@@ -270,7 +280,7 @@ def _archive_handwritten_index(vault: Path) -> Path | None:
         while archive.exists():
             archive = vault / "_meta" / f"index-archive-{stamp}-{n}.md"
             n += 1
-    target.rename(archive)
+    rename_nofollow(target, archive)
     return archive
 
 
@@ -322,5 +332,5 @@ def generate_index_md(vault: Path, db_path: Path) -> IndexResult:
 
     db.close()
     target = vault / "_meta" / "index.md"
-    target.write_text("".join(out), encoding="utf-8")
+    write_text_nofollow(target, "".join(out))
     return IndexResult(path=target, archived=archived, untyped=len(other))

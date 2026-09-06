@@ -107,11 +107,11 @@ def test_search_rejects_a_directory_that_is_not_a_vault(tmp_path, capsys):
 def test_search_json_output_shape(mini_vault, cache, monkeypatch, capsys):
     import json
     monkeypatch.setenv("WIKI_NO_EMBED", "1")
-    assert cli.cmd_search(mini_vault, "envoy proxy", 3, None, True) == 0
+    assert cli.cmd_search(mini_vault, "edge gateway", 3, None, True) == 0
     data = json.loads(capsys.readouterr().out)
     assert data["mode"] == "lexical"
     assert {"path", "section", "snippet", "score"} <= set(data["hits"][0])
-    assert data["hits"][0]["path"] == "entities/envoy-proxy.md"
+    assert data["hits"][0]["path"] == "entities/edge-gateway.md"
 
 
 def test_search_human_output_lists_paths(mini_vault, cache, monkeypatch, capsys):
@@ -119,7 +119,7 @@ def test_search_human_output_lists_paths(mini_vault, cache, monkeypatch, capsys)
     assert cli.cmd_search(mini_vault, "teardown", 3, None, False) == 0
     out = capsys.readouterr().out
     assert out.startswith("[lexical]")
-    assert "entities/frp-reverse-tunnel.md" in out
+    assert "entities/relay-tunnel.md" in out
 
 
 def test_reindex_reports_embedding_status(mini_vault, cache, monkeypatch, capsys):
@@ -133,9 +133,9 @@ def test_search_skips_the_vault_scan_when_recently_synced(mini_vault, cache, mon
     cli.cmd_reindex(mini_vault, full=False)              # fresh sync stamp
     calls = []
     monkeypatch.setattr(cli, "build_index", lambda *a, **kw: calls.append(a))
-    cli.cmd_search(mini_vault, "envoy", 3, None, True)
+    cli.cmd_search(mini_vault, "gateway", 3, None, True)
     assert calls == []                                    # recent: no scan
-    cli.cmd_search(mini_vault, "envoy", 3, None, True, force_sync=True)
+    cli.cmd_search(mini_vault, "gateway", 3, None, True, force_sync=True)
     assert len(calls) == 1                                # --sync forces it
 
 
@@ -144,10 +144,10 @@ def test_search_scans_when_the_index_is_stale_or_missing(mini_vault, cache, monk
     calls = []
     real = cli.build_index
     monkeypatch.setattr(cli, "build_index", lambda *a, **kw: (calls.append(a), real(*a, **kw))[1])
-    cli.cmd_search(mini_vault, "envoy", 3, None, True)    # never built: must scan
+    cli.cmd_search(mini_vault, "gateway", 3, None, True)    # never built: must scan
     assert len(calls) == 1
     monkeypatch.setattr(cli, "seconds_since_sync", lambda p: 10_000.0)
-    cli.cmd_search(mini_vault, "envoy", 3, None, True)    # stale: must scan
+    cli.cmd_search(mini_vault, "gateway", 3, None, True)    # stale: must scan
     assert len(calls) == 2
 
 

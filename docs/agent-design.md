@@ -22,7 +22,9 @@ A deliberately small tool. The agent you already use (Claude Code, Cursor) does 
 
 **No model calls in the CLI.** An earlier version carried its own retrieval agent with model backends. It was removed: the coding agent already reads and reasons better than a second model in the loop, and that second model meant a second set of credentials, prompts, and failure modes to explain. What stayed is the part a model cannot do well by hand: ranking a few hundred pages for a query. `wiki search` returns paths, sections, and snippets. The agent reads them. Nothing in the CLI can hallucinate a citation.
 
-**Embeddings are optional and local.** Ollama with `nomic-embed-text` is the only supported embedder, vault text never leaves the machine, and its absence is not an error. Search falls back to lexical ranking and says so on its first line.
+**Embeddings are optional and local by default.** Ollama with `nomic-embed-text` is the only supported embedder and its absence is not an error; search falls back to lexical ranking and says so on its first line. Because every page section is posted to `WIKI_OLLAMA_URL`, that variable is a trust boundary: non-loopback hosts are refused unless `WIKI_OLLAMA_ALLOW_REMOTE=1` is set.
+
+**A vault is untrusted input.** It may be cloned or synced, so it can contain symlinks to anywhere, FIFOs, pages with list-valued or alias-expanded frontmatter, and megabytes of `[[`. The reader skips anything that is not a plain file resolving inside the vault, writes never follow a symlink, stored frontmatter values are bounded, the wikilink regex is bounded and newline-free, and pages over 2 MB are skipped with a message. The design goal is that one hostile page can cost you one page, never the index.
 
 **Coverage may be partial, never silently.** If the embedder is down during a reindex, unchanged pages keep their chunks and changed pages lose theirs, because stale embeddings would rank confidently on text that no longer exists. Search reports "N of M pages embedded" whenever the two differ. Changing the embedding model re-embeds everything, since vectors from different models do not compare.
 

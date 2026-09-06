@@ -16,6 +16,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .fsutil import rename_nofollow, write_text_nofollow
+
 ENTRY_RE = re.compile(r"^(?:- )?(\d{4}-\d{2})-\d{2} ")
 
 MAX_STRAYS = 20
@@ -49,7 +51,7 @@ def shard_log(vault: Path) -> ShardResult:
     left alone.
     """
     log = vault / "_meta" / "log.md"
-    if not log.exists():
+    if log.is_symlink() or not log.exists():
         return ShardResult()
 
     lines = log.read_text(encoding="utf-8").splitlines()
@@ -97,15 +99,12 @@ def shard_log(vault: Path) -> ShardResult:
     result = ShardResult(strays=strays)
     for month, entries in sorted(months.items()):
         shard = logdir / f"{month}.md"
-        shard.write_text(
-            SHARD_HEADER.format(month=month) + "\n\n".join(entries) + "\n",
-            encoding="utf-8",
-        )
+        write_text_nofollow(shard, SHARD_HEADER.format(month=month) + "\n\n".join(entries) + "\n")
         result.shards.append(shard)
 
     archive = logdir / "archive-full.md"
     if archive.exists():
         archive = logdir / f"archive-full-{len(list(logdir.glob('archive-full*')))}.md"
-    log.rename(archive)
+    rename_nofollow(log, archive)
     result.archived = archive
     return result
