@@ -28,6 +28,8 @@ Trigger: the user asks something the vault might know.
 
 ## Lint
 
+`wiki lint` covers the mechanical half deterministically (orphans, broken wikilinks, missing `projects:`, stale-active) and exits 1 when it finds anything. The agent's job is what is left: contradictions, index drift, and deciding which findings matter.
+
 Trigger: the user asks for a health check.
 
 Read-only. The agent reports a punch list and waits:

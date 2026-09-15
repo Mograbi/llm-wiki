@@ -9,7 +9,8 @@ A deliberately small tool. The agent you already use (Claude Code, Cursor) does 
 - **`embed.py`**: optional local embeddings through Ollama's HTTP API. `probe()` checks both that the daemon answers and that the model is pulled; anything else means "no embedder" and the rest of the tool carries on.
 - **`index.py`**: a sqlite index of pages (path, hash, mtime+size, type, title, projects, updated, status), the wikilink graph, an FTS5 full-text table, and section chunks with float32 embeddings. Hash-keyed incremental rebuild: only changed pages are re-parsed, deleted pages have their rows removed. Regenerates `_meta/index.md` grouped by page type with inbound-link counts as a salience hint; pages without a recognized `type:` land under `## Other` rather than vanishing. A hand-written `index.md` is moved to `index-archive.md` before the first generation, never overwritten.
 - **`migrate.py`**: shards a legacy single `_meta/log.md` into monthly `_meta/log/YYYY-MM.md` files. Parse fully, then write; the original is archived byte-identical. Continuation lines stay with the entry above them; a log with no dated entries is left in place rather than moved.
-- **`cli.py`**: `search`, `reindex`, `init`.
+- **`lint.py`**: `wiki lint`. The four mechanical checks as queries over the same index: orphans (no inbound link from another page), broken wikilinks (target matches no page stem and no `_meta/` file), missing `projects:` on sources/entities/queries, stale `status: active`. Exit code 1 when anything is found so a hook or cron can gate on it. Contradictions and index drift are deliberately not here; a replay of one vault's history showed the agent fixes what it sees within two days and never sees the rest, which is the case for a checker, not a smarter model.
+- **`cli.py`**: `search`, `lint`, `reindex`, `init`.
 - **`config.py`**: vault and cache path resolution, evaluated on each call so the environment can change after import.
 
 ## Decisions worth knowing
