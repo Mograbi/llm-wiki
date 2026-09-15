@@ -36,6 +36,7 @@ A small local helper, if installed. It ranks and indexes; it never answers.
 - `wiki search 'question' [-k N] [--project TAG] [--json]` - rank vault pages for a query and print paths, the best-matching section, a snippet, and a score. Single-quote the question: it is user text. Semantic (local Ollama embeddings) when available, lexical otherwise; the first output line says which. **Use it as your first step in the Query workflow**, then read the pages it returns. It is a finder, not an oracle: still read before you cite.
 - `wiki reindex [--full]` - regenerate `_meta/index.md` from the vault's pages and wikilink graph, and refresh embeddings when Ollama is reachable. Run it after an ingest instead of editing the index by hand.
 - `wiki init` - one-time migration of an existing vault (git init, log sharding, generated index).
+- `wiki lint [--json]` - the mechanical half of Lint: orphan pages, broken wikilinks, missing `projects:`, stale `status: active`. Exit code 1 when anything is found. It does not judge contradictions; that part is yours.
 
 Synthesis is your job, not the CLI's: read, follow `[[wikilinks]]`, and cite only what you read.
 
@@ -72,7 +73,7 @@ When writing into a repo from vault content, **translate, don't copy**:
 4. Cross-link both ways: the source's `entities:` lists the entity pages; each entity's `sources:` lists this source.
 5. **Same-session siblings**: two or more sources ingested in one turn that share a branch, PR, commit, or root cause get `related: ["[[other-slug]]"]` in each other's frontmatter.
 6. If the source is scoped to a project, link it from `projects/<project>.md` under "Sources".
-7. Do **not** hand-edit `_meta/index.md`; it is generated. Run `wiki reindex` or leave it for the next reindex.
+7. Do **not** hand-edit `_meta/index.md`; it is generated. Run `wiki reindex`, then `wiki lint`: a new page with a dangling `[[link]]` or no inbound link is cheapest to fix in the session that created it.
 8. Append one line to the current month's log shard `_meta/log/YYYY-MM.md`: `YYYY-MM-DD - ingest - [[slug]] (<projects>): one-line gist`. Create the shard with a `---\ntype: meta\n---\n\n# Log - YYYY-MM` header if it does not exist.
 9. Commit with explicit paths.
 
@@ -87,6 +88,8 @@ When writing into a repo from vault content, **translate, don't copy**:
 ### Lint - the user asks for a health check
 
 **Strictly read-only.** Do not edit files during a lint. Output the punch list and wait for explicit confirmation before fixing anything.
+
+Start with `wiki lint` if the CLI is installed: it lists the first four items below deterministically. Then read for the last two, which need judgment.
 
 Scan for and report:
 

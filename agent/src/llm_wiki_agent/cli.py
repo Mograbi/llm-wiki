@@ -19,6 +19,7 @@ from . import config
 from .embed import EmbedderError, OllamaEmbedder, get_embedder
 from .fsutil import UnsafePath, write_text_nofollow
 from .index import build_index, generate_index_md, seconds_since_sync
+from .lint import KINDS, mechanical_lint
 from .migrate import LogParseError, shard_log
 from .search import search
 
@@ -215,6 +216,35 @@ def cmd_search(vault: Path, query: str, k: int, project: str | None, as_json: bo
     return 0
 
 
+def cmd_lint(vault: Path, as_json: bool, stale_days: int) -> int:
+    """Mechanical checks only; exit 1 when anything is found so a hook or cron can gate on it."""
+    if not is_vault(vault):
+        print(f"error: {vault} does not look like a vault (no _meta/)", file=sys.stderr)
+        return 1
+    ensure_cache()
+    embedder = get_embedder()
+    age = seconds_since_sync(config.db_path())
+    if age is None or age > SYNC_MAX_AGE:
+        build_index(vault, config.db_path(), embedder)
+    defects = mechanical_lint(vault, config.db_path(), stale_days=stale_days)
+    counts = {k: sum(1 for d in defects if d.kind == k) for k in KINDS}
+    if as_json:
+        print(json.dumps({"counts": counts, "defects": [asdict(d) for d in defects]}, ensure_ascii=False, indent=2))
+        return 1 if defects else 0
+    if not defects:
+        print("no mechanical defects")
+        return 0
+    for kind in KINDS:
+        rows = [d for d in defects if d.kind == kind]
+        if not rows:
+            continue
+        print(f"\n{kind} ({len(rows)})")
+        for d in rows:
+            print(f"  {d.page}" + (f"  -> [[{d.target}]]" if d.target else ""))
+    print(f"\n{len(defects)} defects. Contradictions and index drift are not checked here; that is the agent's lint.")
+    return 1
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="wiki", description=__doc__,
@@ -232,6 +262,10 @@ def main(argv=None) -> int:
     p_se.add_argument("--json", action="store_true", help="machine-readable output")
     p_se.add_argument("--sync", action="store_true",
                       help="re-scan the vault first even if it was scanned in the last 5 minutes")
+    p_li = sub.add_parser("lint", help="mechanical checks: orphans, broken links, missing projects, stale-active")
+    p_li.add_argument("--json", action="store_true", help="machine-readable output")
+    p_li.add_argument("--stale-days", type=int, default=180,
+                      help="status: active pages not updated in this many days (default 180)")
     args = parser.parse_args(argv)
 
     vault = config.vault()
@@ -240,6 +274,8 @@ def main(argv=None) -> int:
             return cmd_init(vault)
         if args.cmd == "search":
             return cmd_search(vault, args.query, args.k, args.project, args.json, args.sync)
+        if args.cmd == "lint":
+            return cmd_lint(vault, args.json, args.stale_days)
         return cmd_reindex(vault, args.full)
     except subprocess.CalledProcessError as e:
         cmd = " ".join(str(a) for a in e.cmd)

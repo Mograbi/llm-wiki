@@ -7,6 +7,8 @@ wiki search "question" [-k 8] [--project TAG] [--json] [--sync]
                            # rank pages for a query: path, best section, snippet, score
 wiki reindex [--full]      # regenerate _meta/index.md (grouped by type, inbound-link counts);
                            # refresh section embeddings when Ollama is reachable
+wiki lint [--json]         # mechanical checks: orphans, broken wikilinks, missing projects, stale-active;
+                           # exit 1 if any, so a hook or cron can gate on it
 wiki init                  # one-time migration of an existing vault: git init, shard a legacy
                            # single-file log into _meta/log/YYYY-MM.md, archive a hand-written
                            # index, generate the new one
