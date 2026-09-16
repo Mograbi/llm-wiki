@@ -36,7 +36,7 @@ A small local helper, if installed. It ranks and indexes; it never answers.
 - `wiki search 'question' [-k N] [--project TAG] [--json]` - rank vault pages for a query and print paths, the best-matching section, a snippet, and a score. Single-quote the question: it is user text. Semantic (local Ollama embeddings) when available, lexical otherwise; the first output line says which. **Use it as your first step in the Query workflow**, then read the pages it returns. It is a finder, not an oracle: still read before you cite.
 - `wiki reindex [--full]` - regenerate `_meta/index.md` from the vault's pages and wikilink graph, and refresh embeddings when Ollama is reachable. Run it after an ingest instead of editing the index by hand.
 - `wiki init` - one-time migration of an existing vault (git init, log sharding, generated index).
-- `wiki lint [--json]` - the mechanical half of Lint: orphan pages, broken wikilinks, missing `projects:`, stale `status: active`. Exit code 1 when anything is found. It does not judge contradictions; that part is yours.
+- `wiki lint [--json] [--stale-days N]` - the mechanical half of Lint: orphan pages, broken wikilinks, missing `projects:`, stale `status: active` on any page type (default 180 days). Exit code 1 when anything is found. Model-free and always current: it syncs its own index on every run. It does not judge contradictions; that part is yours.
 
 Synthesis is your job, not the CLI's: read, follow `[[wikilinks]]`, and cite only what you read.
 

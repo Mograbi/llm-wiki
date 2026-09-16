@@ -12,6 +12,7 @@ from datetime import date
 from pathlib import Path
 from typing import Literal
 
+from .fsutil import is_regular_file_inside
 from .index import open_db
 from .vault import normalize_target
 
@@ -39,7 +40,8 @@ def _meta_target_exists(vault: Path, target: str) -> bool:
     # `[[_meta/schema]]`-style links point outside the indexed content dirs but are real pages.
     if not target.startswith("_meta/") or ".." in target:
         return False
-    return (vault / f"{target}.md").is_file()
+    # Not from our own walk, so the strict check: a plain file that resolves inside the vault.
+    return is_regular_file_inside(vault / f"{target}.md", vault)
 
 
 def mechanical_lint(vault: Path, db_path: Path, *, today: date | None = None,

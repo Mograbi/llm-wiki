@@ -217,16 +217,16 @@ def cmd_search(vault: Path, query: str, k: int, project: str | None, as_json: bo
 
 
 def cmd_lint(vault: Path, as_json: bool, stale_days: int) -> int:
-    """Mechanical checks only; exit 1 when anything is found so a hook or cron can gate on it."""
+    """Mechanical checks only; exit 1 when anything is found so a hook or cron can gate on it.
+
+    No model in the loop and no freshness window: lint syncs its own index (pages and links,
+    never embeddings) on every run, so the exit code reflects the vault as it is now."""
     if not is_vault(vault):
         print(f"error: {vault} does not look like a vault (no _meta/)", file=sys.stderr)
         return 1
     ensure_cache()
-    embedder = get_embedder()
-    age = seconds_since_sync(config.db_path())
-    if age is None or age > SYNC_MAX_AGE:
-        build_index(vault, config.db_path(), embedder)
-    defects = mechanical_lint(vault, config.db_path(), stale_days=stale_days)
+    build_index(vault, config.lint_db_path(), None)
+    defects = mechanical_lint(vault, config.lint_db_path(), stale_days=stale_days)
     counts = {k: sum(1 for d in defects if d.kind == k) for k in KINDS}
     if as_json:
         print(json.dumps({"counts": counts, "defects": [asdict(d) for d in defects]}, ensure_ascii=False, indent=2))

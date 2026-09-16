@@ -73,8 +73,8 @@ def test_defect_key_is_hashable_and_stable():
 def test_cli_exit_code_and_json(lint_vault, tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("WIKI_VAULT", str(lint_vault))
     monkeypatch.setenv("WIKI_CACHE", str(tmp_path / "cache"))
-    monkeypatch.setattr(cli, "get_embedder", lambda: None)
-    assert cli.main(["lint", "--json"]) == 1            # defects found -> non-zero, for hooks
+    # fixture dates are fixed, so pin the threshold or this test rots in 180 days
+    assert cli.main(["lint", "--json", "--stale-days", "100000"]) == 1   # defects -> non-zero, for hooks
     out = capsys.readouterr().out
     import json
     report = json.loads(out)
@@ -89,6 +89,41 @@ def test_cli_clean_vault_exits_zero(lint_vault, tmp_path, monkeypatch, capsys):
         "---\ntype: source\nprojects: [acme]\nstatus: summarized\ningested: 2026-09-01\n---\n# Untagged\n\n[[hub]].\n")
     monkeypatch.setenv("WIKI_VAULT", str(lint_vault))
     monkeypatch.setenv("WIKI_CACHE", str(tmp_path / "cache"))
-    monkeypatch.setattr(cli, "get_embedder", lambda: None)
-    assert cli.main(["lint"]) == 0
+    assert cli.main(["lint", "--stale-days", "100000"]) == 0
     assert "no mechanical defects" in capsys.readouterr().out
+
+
+def test_cli_lint_never_touches_the_embedder_or_the_search_index(lint_vault, tmp_path, monkeypatch, capsys):
+    """Lint is advertised as model-free: no Ollama probe, and search's embeddings stay untouched."""
+    monkeypatch.setenv("WIKI_VAULT", str(lint_vault))
+    monkeypatch.setenv("WIKI_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setattr(cli, "get_embedder", lambda: pytest.fail("lint probed the embedder"))
+    assert cli.main(["lint", "--stale-days", "100000"]) == 1
+    assert (tmp_path / "cache/lint.db").exists() and not (tmp_path / "cache/index.db").exists()
+
+
+def test_cli_lint_is_current_with_no_freshness_window(lint_vault, tmp_path, monkeypatch, capsys):
+    """A hook may run lint seconds after a sync; a defect added since must still be reported."""
+    monkeypatch.setenv("WIKI_VAULT", str(lint_vault))
+    monkeypatch.setenv("WIKI_CACHE", str(tmp_path / "cache"))
+    cli.main(["lint", "--json", "--stale-days", "100000"])
+    import json
+    before = json.loads(capsys.readouterr().out)["counts"]["orphan"]
+    (lint_vault / "entities/newcomer.md").write_text(
+        "---\ntype: entity\nprojects: [acme]\n---\n# Newcomer\n\nNobody links here.\n")
+    cli.main(["lint", "--json", "--stale-days", "100000"])
+    assert json.loads(capsys.readouterr().out)["counts"]["orphan"] == before + 1
+
+
+def test_meta_link_to_a_symlink_outside_the_vault_is_broken(lint_vault, tmp_path):
+    """`_meta/` targets are checked on disk; a symlink pointing out of the vault must not count."""
+    outside = tmp_path / "outside.md"
+    outside.write_text("# not yours\n")
+    (lint_vault / "_meta/escape.md").symlink_to(outside)
+    (lint_vault / "entities/leaf.md").write_text(
+        "---\ntype: entity\nprojects: [acme]\nstatus: active\nupdated: 2026-09-01\n---\n"
+        "# Leaf\n\nBack to [[hub]] and to [[_meta/escape]] and [[_meta/schema]].\n")
+    db = tmp_path / "idx.db"
+    build_index(lint_vault, db, None)
+    broken = {d.target for d in mechanical_lint(lint_vault, db, stale_days=100000) if d.kind == "broken_link"}
+    assert "_meta/escape" in broken and "_meta/schema" not in broken
