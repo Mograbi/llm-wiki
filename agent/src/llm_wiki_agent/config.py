@@ -33,3 +33,8 @@ def cache() -> Path:
 
 def db_path() -> Path:
     return cache() / "index.db"
+
+
+def lint_db_path() -> Path:
+    """Lint keeps its own pages/links index so a model-free sync never drops search's embeddings."""
+    return cache() / "lint.db"

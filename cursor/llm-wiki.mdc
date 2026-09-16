@@ -17,7 +17,7 @@ You maintain a persistent markdown knowledge vault for the user (Karpathy's "LLM
 
 **Query** (user asks a question): run `wiki search "<question>"` if the CLI is installed and take its top hits as candidates; otherwise start from `_meta/index.md` and the project hub and grep the vault. Read the best two to four pages, follow their `[[wikilinks]]` both ways. Answer with `[[wikilinks]]` to pages you read. Save recurring, non-trivial answers to `queries/<slug>.md` and log them. If the vault has nothing, say so.
 
-**Lint** (user asks for a health check): read-only. Run `wiki lint` first if installed (orphans, broken wikilinks, missing `projects:`, stale entities, deterministic); then read for contradictions and index drift. Do not fix anything until the user confirms. After an ingest, `wiki reindex` then `wiki lint`.
+**Lint** (user asks for a health check): read-only. Run `wiki lint` first if installed (orphans, broken wikilinks, missing `projects:`, stale-active pages of any type, deterministic); then read for contradictions and index drift. Do not fix anything until the user confirms. After an ingest, `wiki reindex` then `wiki lint`.
 
 **Log today**: enumerate today's commits under the `repo_root` named in `_meta/schema.md` (use `find -print0 | while read -d ''`, `git -C`, and `printf`; never splice a directory name into a `sed` script), diff against the current log shard, ingest what is missing.
 

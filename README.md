@@ -101,7 +101,7 @@ count, so the most-referenced pages stand out:
 
 - **Ingest**: a source becomes a summary page, the concept pages it touches are created or updated, everything is cross-linked both ways, one log line is appended, one commit is made.
 - **Query**: the agent runs `wiki search` to find candidate pages, reads the best ones, follows the wikilink graph, and answers with `[[citations]]` to pages that exist. Answers worth keeping are saved to `queries/`.
-- **Lint**: orphans, stale entities, broken links, missing project tags, contradictions, index drift. Read-only until you say fix. The mechanical half (orphans, broken links, missing tags, stale pages) is `wiki lint`, a deterministic check with an exit code a hook can gate on; contradictions stay the agent's judgment.
+- **Lint**: orphans, stale-active pages (any type, projects included), broken links, missing project tags, contradictions, index drift. Read-only until you say fix. The mechanical half (orphans, broken links, missing tags, stale pages) is `wiki lint`, a deterministic model-free check with an exit code a hook can gate on; contradictions stay the agent's judgment.
 
 Two supporting workflows, **Log today** (reconcile the day's commits with the log) and **Killed-session recovery** (a fresh session finds what the dead one never filed), are described in [docs/workflows.md](docs/workflows.md).
 
@@ -129,7 +129,7 @@ wiki search "question" [-k 8] [--project TAG] [--json] [--sync]
                            # rank pages: path, best section, snippet, score
 wiki reindex [--full]      # regenerate _meta/index.md; refresh embeddings if Ollama is up
 wiki init                  # migrate an existing vault: git init, shard the log, generate the index
-wiki lint [--json]         # mechanical checks: orphans, broken wikilinks, missing projects, stale-active; exit 1 if any
+wiki lint [--json] [--stale-days N]   # mechanical checks: orphans, broken wikilinks, missing projects, stale-active (default 180 days); exit 1 if any. Model-free, always current
 ```
 
 `wiki search` is a finder, not an oracle. It returns pages for the agent to read; there is no model in the loop, so there is nothing to hallucinate. It always runs a full-text ranker (SQLite FTS5, BM25, stemming, title weighted). With Ollama it also ranks by cosine over section-level embeddings and fuses the two lists by reciprocal rank, with each ranker's first choice guaranteed a top-3 slot, so a page both rankers like rises to the top and a rare exact token still surfaces when only full-text search can see it. The first line of its output says which mode ran (`hybrid`, `semantic`, or `lexical`) and whether coverage is partial.
