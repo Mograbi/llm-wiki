@@ -253,7 +253,7 @@ generated: true
 
 """
 
-TYPE_ORDER = ("project", "entity", "source", "query", "person")
+TYPE_ORDER = ("project", "entity", "source", "query", "person", "agent")
 
 
 @dataclass

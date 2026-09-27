@@ -17,6 +17,7 @@ This vault is maintained by an AI agent on the user's behalf. It follows Karpath
 - `entities/` - evergreen concept pages (techniques, tools, systems, components)
 - `queries/` - synthesized answers worth preserving
 - `people/` - collaborators, contacts, authors (optional)
+- `agents/` - one registry page per non-human writer (an unattended agent that commits to this vault)
 
 Subfolders inside the content folders are allowed (`sources/2026/foo.md`); the index generator recurses and skips dot-directories such as `.obsidian` and `.trash`. Prefer frontmatter and tags over deep folder trees, since wikilinks resolve by filename, not path.
 
@@ -38,6 +39,7 @@ source_type: paper | gist | video | doc | conversation | article | incident
 url:
 author:
 ingested: YYYY-MM-DD
+written_by:           # only on agent-written pages; absent = the vault owner
 projects: [example]
 entities: ["[[Some Concept]]"]
 related: []            # sibling sources sharing a PR, branch, or root cause
@@ -65,6 +67,7 @@ tags: []
 ---
 type: query
 asked: YYYY-MM-DD
+written_by:           # only on agent-written pages; absent = the vault owner
 projects: [example]
 entities: ["[[Some Concept]]"]
 sources_used: ["[[some-source-slug]]"]
@@ -92,6 +95,20 @@ updated: YYYY-MM-DD
 ---
 ```
 
+### Agent
+```yaml
+---
+type: agent
+host:                 # where it runs (hostname or VM name; IPs churn)
+purpose:
+writes:               # what it may create, e.g. sources/test-run-*, its own branch
+owner: "[[your-name]]"
+projects: []
+status: active | paused | retired
+updated: YYYY-MM-DD
+---
+```
+
 ## Conventions
 
 - **Linking**: wikilinks only, `[[Page]]`, never `[text](file.md)`. Quote them inside YAML lists.
@@ -100,6 +117,8 @@ updated: YYYY-MM-DD
 - **Tags**: lowercase, hyphenated, small vocabulary.
 - **Provenance**: every claim carries who said it, when, and where. Corrections are explicit: update the page, record what changed in `last_change:`, and say "supersedes" or "corrects" in the log line.
 - **Public vs private**: this vault may hold names, customers, and hosts. Anything copied out into a code repository or a public document is translated to generic operational wording first.
+- **Writer identity**: pages written by an agent carry `written_by: <agent-name>` (a page under `agents/`) and are committed under that agent's git identity (`<name> <<name>@vault>`); the two must agree. No `written_by` means the vault owner wrote it. Agents use role names (`edge-tester`), never host or ordinal names.
+- **Agent write policy**: an agent creates its own pages and links them; it never edits a page it did not write, and it never commits to `master`. It pushes an `agent/<name>-<topic>-<date>` branch for the owner to merge.
 
 ## Repositories
 

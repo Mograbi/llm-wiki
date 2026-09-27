@@ -13,7 +13,7 @@ import yaml
 
 from .fsutil import is_plain_file
 
-CONTENT_DIRS = ("sources", "entities", "queries", "projects", "people")
+CONTENT_DIRS = ("sources", "entities", "queries", "projects", "people", "agents")
 
 # Bounded and newline-free so a page full of "[[" cannot make matching quadratic.
 WIKILINK_RE = re.compile(r"\[\[([^\[\]|#\n]{1,200})(?:[#|][^\[\]\n]{0,200})?\]\]")

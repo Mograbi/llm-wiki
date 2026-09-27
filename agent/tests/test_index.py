@@ -260,3 +260,19 @@ def test_older_index_without_stat_column_is_migrated(tmp_path):
     raw.commit(); raw.close()
     db = open_db(db_path)
     assert "stat" in {r["name"] for r in db.execute("PRAGMA table_info(pages)")}
+
+
+def test_agents_folder_is_content_and_indexed(mini_vault, tmp_path):
+    (mini_vault / "agents").mkdir()
+    (mini_vault / "agents/edge-tester.md").write_text(
+        "---\ntype: agent\nhost: vm\npurpose: test PRs\nprojects: [acme]\n"
+        "owner: \"[[relay-tunnel]]\"\nstatus: active\nupdated: 2026-09-27\n---\n\n# edge-tester\n\nWrites [[edge-gateway]] reports.\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "index.db"
+    build_index(mini_vault, db_path)
+    text = generate_index_md(mini_vault, db_path).path.read_text(encoding="utf-8")
+    assert "## Agents (1)" in text
+    assert "- [[edge-tester]] — edge-tester [acme]" in text
+    # its outbound links count as inbound for the target
+    assert "- [[edge-gateway]] — Edge gateway [acme] (3←)" in text
