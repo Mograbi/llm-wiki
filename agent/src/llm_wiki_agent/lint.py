@@ -36,9 +36,10 @@ def _stem(path: str) -> str:
     return normalize_target(Path(path).stem)
 
 
-def _meta_target_exists(vault: Path, target: str) -> bool:
-    # `[[_meta/schema]]`-style links point outside the indexed content dirs but are real pages.
-    if not target.startswith("_meta/") or ".." in target:
+def _path_target_exists(vault: Path, target: str) -> bool:
+    # Path-qualified links (`[[_meta/schema]]`, `[[notes/2026/analysis]]`) point outside
+    # the indexed content dirs but are real pages.
+    if "/" not in target or target.startswith("/") or ".." in target:
         return False
     # Not from our own walk, so the strict check: a plain file that resolves inside the vault.
     return is_regular_file_inside(vault / f"{target}.md", vault)
@@ -58,7 +59,7 @@ def mechanical_lint(vault: Path, db_path: Path, *, today: date | None = None,
         dst_n = normalize_target(dst)
         tgt = by_stem.get(dst_n)
         if tgt is None:
-            if not _meta_target_exists(vault, dst_n):
+            if not _path_target_exists(vault, dst_n):
                 out.append(Defect("broken_link", src, dst_n))
         elif tgt != src:
             inbound[tgt].add(src)

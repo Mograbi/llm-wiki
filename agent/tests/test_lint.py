@@ -127,3 +127,17 @@ def test_meta_link_to_a_symlink_outside_the_vault_is_broken(lint_vault, tmp_path
     build_index(lint_vault, db, None)
     broken = {d.target for d in mechanical_lint(lint_vault, db, stale_days=100000) if d.kind == "broken_link"}
     assert "_meta/escape" in broken and "_meta/schema" not in broken
+
+
+def test_path_qualified_link_outside_content_dirs_resolves_on_disk(lint_vault, tmp_path):
+    """`[[notes/2026/analysis]]` is a real page outside sources/entities/queries; only a
+    missing file makes such a link broken."""
+    (lint_vault / "notes/2026").mkdir(parents=True)
+    (lint_vault / "notes/2026/analysis.md").write_text("# 2026 notes\n")
+    (lint_vault / "entities/leaf.md").write_text(
+        "---\ntype: entity\nprojects: [acme]\nstatus: active\nupdated: 2026-09-01\n---\n"
+        "# Leaf\n\nBack to [[hub]], see [[notes/2026/analysis]] and [[notes/9999/analysis]].\n")
+    db = tmp_path / "idx.db"
+    build_index(lint_vault, db, None)
+    broken = {d.target for d in mechanical_lint(lint_vault, db, stale_days=100000) if d.kind == "broken_link"}
+    assert "notes/9999/analysis" in broken and "notes/2026/analysis" not in broken
