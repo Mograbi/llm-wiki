@@ -3,3 +3,10 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .DS_Store
+
+# librarian runtime files, if host-run.sh is run from this checkout
+librarian/env
+librarian/secrets/
+librarian/logs/
+librarian/vault/
+librarian/cache/
