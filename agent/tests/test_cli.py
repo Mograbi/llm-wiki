@@ -87,7 +87,9 @@ def test_reindex_rejects_a_directory_that_is_not_a_vault(tmp_path, capsys):
 def test_reindex_regenerates_the_index(mini_vault, cache):
     assert cli.cmd_reindex(mini_vault, full=False) == 0
     text = (mini_vault / "_meta" / "index.md").read_text(encoding="utf-8")
-    assert "## Entities (3)" in text
+    assert "[[_meta/index/entities|Entities]] — 3" in text
+    assert (mini_vault / "_meta" / "index" / "entities.md").exists()
+    assert (mini_vault / "_meta" / "hot.md").exists()
 
 
 def test_main_returns_1_on_a_failed_git_command(mini_vault, monkeypatch, cache, capsys):
