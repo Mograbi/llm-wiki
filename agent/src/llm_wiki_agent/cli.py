@@ -2,6 +2,8 @@
 
   wiki search "query"        rank pages for a query (hybrid with Ollama, full-text without)
   wiki reindex               regenerate _meta/index.md (+ embeddings when Ollama is up)
+  wiki lint                  mechanical checks with an exit code (orphans, broken links, ...)
+  wiki commit -m MSG -- PATHS  commit explicit paths under a vault-wide lock (safe across sessions)
   wiki init                  one-time migration of an existing vault (git, log shards, index)
 """
 
@@ -12,6 +14,7 @@ import json
 import sqlite3
 import subprocess
 import sys
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -170,7 +173,8 @@ def cmd_reindex(vault: Path, full: bool) -> int:
     if index.archived:
         print(f"index: hand-written index.md archived to {index.archived.relative_to(vault)}")
     print(f"reindexed: {stats['updated']} changed, {stats['removed']} removed, "
-          f"{stats['embedded']} embedded")
+          f"{stats['embedded']} embedded; _meta/index.md + {len(index.shards)} shards"
+          f" + _meta/hot.md regenerated")
     report_skips(stats)
     if index.untyped:
         print(f"note: {index.untyped} pages have no recognized `type:`"
@@ -214,6 +218,94 @@ def cmd_search(vault: Path, query: str, k: int, project: str | None, as_json: bo
         if h.snippet:
             print(f"    {h.snippet}")
     return 0
+
+
+COMMIT_RETRIES = 6            # git's own index.lock from a non-CLI git process
+COMMIT_LOCK_WAIT_S = 60.0     # another `wiki commit` in flight
+
+
+def git_dir(vault: Path) -> Path:
+    out = git(vault, "rev-parse", "--git-dir", quiet=True).stdout.strip()
+    p = Path(out)
+    return p if p.is_absolute() else vault / p
+
+
+def cmd_commit(vault: Path, message: str, paths: list[str]) -> int:
+    """Stage and commit explicit paths under a vault-wide advisory lock.
+
+    Several agent sessions share one working tree; without a lock two commits
+    collide on `.git/index.lock` and the loser fails. The lock serializes our own
+    commits; a retry with backoff covers a foreign git process holding the lock.
+    Never `git add -A`: other sessions' half-written pages must not be swept in."""
+    if not is_vault(vault):
+        print(f"error: {vault} does not look like a vault (no _meta/)", file=sys.stderr)
+        return 1
+    if not (vault / ".git").exists():
+        print("error: vault is not a git repository (run `wiki init`)", file=sys.stderr)
+        return 1
+    if not paths:
+        print("error: give the paths to commit after `--`; `wiki commit` never adds everything",
+              file=sys.stderr)
+        return 1
+    if not message.strip():
+        print("error: empty commit message", file=sys.stderr)
+        return 1
+    lock_path = git_dir(vault) / "llm-wiki-commit.lock"
+    with _commit_lock(lock_path):
+        ensure_git_identity(vault)
+        git(vault, "add", "--", *paths)
+        delay = 0.25
+        for attempt in range(COMMIT_RETRIES):
+            done = git(vault, "commit", "-q", "-m", message, "--", *paths, check=False, quiet=True)
+            if done.returncode == 0:
+                sha = git(vault, "rev-parse", "--short", "HEAD", quiet=True).stdout.strip()
+                print(f"committed {sha}: {message.splitlines()[0]}")
+                return 0
+            err = (done.stderr or "") + (done.stdout or "")
+            if "nothing to commit" in err or "no changes added" in err or "nothing added" in err:
+                print("nothing to commit for those paths")
+                return 0
+            if "index.lock" not in err or attempt == COMMIT_RETRIES - 1:
+                print(f"error: git commit failed: {err.strip()}", file=sys.stderr)
+                return 1
+            time.sleep(delay)
+            delay = min(delay * 2, 4.0)
+    return 1
+
+
+class _commit_lock:
+    """flock on a file inside .git; polling so a stuck holder gives a message, not a hang."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self.fh = None
+
+    def __enter__(self):
+        try:
+            import fcntl
+        except ImportError:          # pragma: no cover - Windows: rely on git's own lock
+            return self
+        self.fh = open(self.path, "w")
+        deadline = time.monotonic() + COMMIT_LOCK_WAIT_S
+        while True:
+            try:
+                fcntl.flock(self.fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return self
+            except BlockingIOError:
+                if time.monotonic() > deadline:
+                    self.fh.close()
+                    self.fh = None
+                    raise CliError(f"another `wiki commit` has held {self.path} for over "
+                                   f"{int(COMMIT_LOCK_WAIT_S)}s; retry, or remove the file if "
+                                   "no wiki process is running")
+                time.sleep(0.1)
+
+    def __exit__(self, *exc):
+        if self.fh is not None:
+            import fcntl
+            fcntl.flock(self.fh, fcntl.LOCK_UN)
+            self.fh.close()
+        return False
 
 
 def cmd_lint(vault: Path, as_json: bool, stale_days: int) -> int:
@@ -266,6 +358,9 @@ def main(argv=None) -> int:
     p_li.add_argument("--json", action="store_true", help="machine-readable output")
     p_li.add_argument("--stale-days", type=int, default=180,
                       help="status: active pages not updated in this many days (default 180)")
+    p_co = sub.add_parser("commit", help="commit explicit vault paths under a lock shared by all sessions")
+    p_co.add_argument("-m", "--message", required=True, help="commit message")
+    p_co.add_argument("paths", nargs="*", help="paths to stage and commit (after --)")
     args = parser.parse_args(argv)
 
     vault = config.vault()
@@ -276,6 +371,8 @@ def main(argv=None) -> int:
             return cmd_search(vault, args.query, args.k, args.project, args.json, args.sync)
         if args.cmd == "lint":
             return cmd_lint(vault, args.json, args.stale_days)
+        if args.cmd == "commit":
+            return cmd_commit(vault, args.message, args.paths)
         return cmd_reindex(vault, args.full)
     except subprocess.CalledProcessError as e:
         cmd = " ".join(str(a) for a in e.cmd)

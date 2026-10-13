@@ -23,6 +23,8 @@ MAX_FIELD_CHARS = 300                 # stored frontmatter scalars are truncated
 MAX_LIST_ITEMS = 50
 H1_RE = re.compile(r"^# (.+)$", re.MULTILINE)
 SECTION_RE = re.compile(r"^## (.+)$", re.MULTILINE)
+MAX_TLDR_CHARS = 160
+_MD_NOISE_RE = re.compile(r"[*_`]+")
 
 
 @dataclass
@@ -36,6 +38,30 @@ class Page:
     def title(self) -> str:
         m = H1_RE.search(self.body)
         return m.group(1).strip() if m else Path(self.path).stem
+
+    @property
+    def tldr(self) -> str:
+        """First prose line after the title, stripped of markdown emphasis and bounded.
+        It is what the generated index shows next to the title so a reader can route
+        without opening the page. Headings, tables, html comments and list bullets
+        are skipped; an empty string means the page has no prose preamble."""
+        after = self.body
+        m = H1_RE.search(after)
+        if m:
+            after = after[m.end():]
+        for line in after.splitlines():
+            t = line.strip()
+            if not t or t.startswith(("#", "|", "<!--", "```", "---", ">")):
+                if t.startswith("```"):
+                    break
+                continue
+            t = t.lstrip("-*+ ").strip()
+            t = _MD_NOISE_RE.sub("", t)
+            t = " ".join(t.split())
+            if len(t) > MAX_TLDR_CHARS:
+                t = t[:MAX_TLDR_CHARS].rsplit(" ", 1)[0] + "…"
+            return t
+        return ""
 
     @property
     def wikilinks(self) -> list[str]:

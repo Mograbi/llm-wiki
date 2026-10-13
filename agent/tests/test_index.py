@@ -9,6 +9,13 @@ from conftest import FakeEmbedder
 from llm_wiki_agent.index import build_index, generate_index_md, open_db
 
 
+def generated_text(result) -> str:
+    """Overview plus every shard: the lists moved out of index.md into _meta/index/."""
+    parts = [result.path.read_text(encoding="utf-8")]
+    parts += [s.read_text(encoding="utf-8") for s in result.shards]
+    return "\n".join(parts)
+
+
 def counts(db):
     return {t: db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("pages", "links")}
 
@@ -63,13 +70,13 @@ def test_generate_index_md_groups_by_type_with_inbound_counts(mini_vault, tmp_pa
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path)
     result = generate_index_md(mini_vault, db_path)
-    text = result.path.read_text(encoding="utf-8")
+    text = generated_text(result)
     assert text.startswith("---\ntype: meta\ngenerated: true")
-    assert "## Entities (3)" in text
-    assert "## Sources (1)" in text
-    assert "## Queries (1)" in text
+    assert "# Entities (3)" in text
+    assert "# Sources (1)" in text
+    assert "# Queries (1)" in text
     # edge-gateway is linked from two pages
-    assert "- [[edge-gateway]] — Edge gateway [acme] (2←)" in text
+    assert "- [[edge-gateway]] — Edge gateway — TLS front for edge services. [acme] (2←)" in text
 
 
 def test_untyped_pages_land_under_other(mini_vault, tmp_path):
@@ -80,8 +87,8 @@ def test_untyped_pages_land_under_other(mini_vault, tmp_path):
     build_index(mini_vault, db_path)
     result = generate_index_md(mini_vault, db_path)
     assert result.untyped == 1
-    text = result.path.read_text(encoding="utf-8")
-    assert "## Other (1)" in text
+    text = generated_text(result)
+    assert "# Other (1)" in text
     assert "- [[no-frontmatter]] — Plain page" in text
 
 
@@ -93,7 +100,7 @@ def test_nested_pages_are_indexed(mini_vault, tmp_path):
                       encoding="utf-8")
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path)
-    text = generate_index_md(mini_vault, db_path).path.read_text(encoding="utf-8")
+    text = generated_text(generate_index_md(mini_vault, db_path))
     assert "- [[nested-source]] — Nested source" in text
 
 
@@ -116,8 +123,8 @@ def test_inbound_count_survives_spaces_in_filenames(mini_vault, tmp_path):
         "---\ntype: entity\n---\n\n# Refers\n\nSee [[space page]].\n", encoding="utf-8")
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path)
-    text = generate_index_md(mini_vault, db_path).path.read_text(encoding="utf-8")
-    assert "- [[space page]] — Space Page (1←)" in text
+    text = generated_text(generate_index_md(mini_vault, db_path))
+    assert "- [[space page]] — Space Page" in text and "(1←)" in text
 
 
 def test_handwritten_index_is_archived_not_overwritten(mini_vault, tmp_path):
@@ -271,8 +278,8 @@ def test_agents_folder_is_content_and_indexed(mini_vault, tmp_path):
     )
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path)
-    text = generate_index_md(mini_vault, db_path).path.read_text(encoding="utf-8")
-    assert "## Agents (1)" in text
-    assert "- [[edge-tester]] — edge-tester [acme]" in text
+    text = generated_text(generate_index_md(mini_vault, db_path))
+    assert "# Agents (1)" in text
+    assert "- [[edge-tester]] — edge-tester" in text and "[acme]" in text
     # its outbound links count as inbound for the target
-    assert "- [[edge-gateway]] — Edge gateway [acme] (3←)" in text
+    assert "- [[edge-gateway]] — Edge gateway — TLS front for edge services. [acme] (3←)" in text

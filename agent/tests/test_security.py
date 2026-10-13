@@ -33,7 +33,9 @@ def test_symlinked_page_pointing_outside_the_vault_is_not_indexed(mini_vault, tm
     stats = build_index(mini_vault, db_path)
     assert "sources/leak.md" in stats["skipped"]
     assert search(mini_vault, db_path, "top secret", None).hits == []
-    assert "leak" not in generate_index_md(mini_vault, db_path).path.read_text(encoding="utf-8")
+    result = generate_index_md(mini_vault, db_path)
+    for f in [result.path, *result.shards, result.hot]:
+        assert "leak" not in f.read_text(encoding="utf-8")
 
 
 def test_symlinked_page_inside_the_vault_is_also_skipped(mini_vault, tmp_path):
@@ -95,8 +97,10 @@ def test_list_valued_type_and_status_do_not_crash_the_index(mini_vault, tmp_path
          "---\ntype: [entity, evil]\nstatus: {a: 1}\nprojects: {not: a-list}\n---\n\n# Evil\n")
     db_path = tmp_path / "index.db"
     build_index(mini_vault, db_path)
-    text = generate_index_md(mini_vault, db_path).path.read_text(encoding="utf-8")
+    result = generate_index_md(mini_vault, db_path)
+    text = (mini_vault / "_meta" / "index" / "other.md").read_text(encoding="utf-8")
     assert "- [[evil]] — Evil" in text                    # lands under Other
+    assert "Other]] — 1" in result.path.read_text(encoding="utf-8")
     assert search(mini_vault, db_path, "evil", None).hits[0].path == "entities/evil.md"
 
 

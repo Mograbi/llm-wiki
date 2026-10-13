@@ -53,3 +53,16 @@ def rename_nofollow(src: Path, dst: Path) -> None:
     if dst.is_symlink():
         raise UnsafePath(f"refusing to rename onto symlink: {dst}")
     src.rename(dst)
+
+
+def write_text_atomic(path: Path, text: str) -> None:
+    """Write a file so a concurrent reader (another agent session, a sync client,
+    `git add`) sees either the old content or the new one, never a truncated file.
+    The temp file lives beside the target with a `.tmp` suffix, which vaults ignore."""
+    tmp = path.with_name(f".{path.name}.tmp")
+    write_text_nofollow(tmp, text)
+    try:
+        rename_nofollow(tmp, path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
