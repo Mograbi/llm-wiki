@@ -52,17 +52,23 @@ def mechanical_lint(vault: Path, db_path: Path, *, today: date | None = None,
     db = open_db(db_path)
     pages = db.execute("SELECT path, type, projects, updated, status FROM pages").fetchall()
     links = db.execute("SELECT src, dst FROM links").fetchall()
-    by_stem = {_stem(p[0]): p[0] for p in pages}
+    # A stem can name more than one page (entities/x.md and sources/x.md): a bare
+    # [[x]] is ambiguous for Obsidian, but it is an inbound link to each of them.
+    by_stem: dict[str, list[str]] = {}
+    for p in pages:
+        by_stem.setdefault(_stem(p[0]), []).append(p[0])
     inbound: dict[str, set[str]] = {p[0]: set() for p in pages}
     out: list[Defect] = []
     for src, dst in links:
         dst_n = normalize_target(dst)
-        tgt = by_stem.get(dst_n)
-        if tgt is None:
+        targets = by_stem.get(dst_n)
+        if targets is None:
             if not _path_target_exists(vault, dst_n):
                 out.append(Defect("broken_link", src, dst_n))
-        elif tgt != src:
-            inbound[tgt].add(src)
+            continue
+        for tgt in targets:
+            if tgt != src:
+                inbound[tgt].add(src)
     for path, ptype, projects, updated, status in pages:
         if not inbound[path]:
             out.append(Defect("orphan", path))
