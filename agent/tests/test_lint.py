@@ -141,3 +141,15 @@ def test_path_qualified_link_outside_content_dirs_resolves_on_disk(lint_vault, t
     build_index(lint_vault, db, None)
     broken = {d.target for d in mechanical_lint(lint_vault, db, stale_days=100000) if d.kind == "broken_link"}
     assert "notes/9999/analysis" in broken and "notes/2026/analysis" not in broken
+
+
+def test_pages_sharing_a_stem_both_get_the_inbound_link(mini_vault, tmp_path):
+    """entities/x.md and sources/x.md: a [[x]] link is inbound to both, so neither is an orphan."""
+    (mini_vault / "sources" / "edge-gateway.md").write_text(
+        "---\ntype: source\nprojects: [acme]\n---\n\n# Edge gateway (vendor doc)\n", encoding="utf-8")
+    db_path = tmp_path / "lint.db"
+    build_index(mini_vault, db_path)
+    defects = mechanical_lint(mini_vault, db_path, today=date(2026, 9, 1))
+    orphans = {d.page for d in defects if d.kind == "orphan"}
+    assert "entities/edge-gateway.md" not in orphans
+    assert "sources/edge-gateway.md" not in orphans
