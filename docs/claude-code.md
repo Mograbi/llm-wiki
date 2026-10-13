@@ -26,6 +26,23 @@ The skill looks for the vault in this order: `$WIKI_VAULT`, then `~/.config/llm-
 | "lint the vault" | Read-only punch list |
 | "do you have anything to save?" (new session) | Killed-session recovery |
 
+## Hooks
+
+`install.sh` links two hook scripts into `~/.claude/hooks/` and prints the settings snippet; add it to `~/.claude/settings.json` to enable them:
+
+```json
+"hooks": {
+  "PostToolUse": [{"matcher": "Edit|Write|MultiEdit",
+                   "hooks": [{"type": "command", "command": "bash '/home/you/.claude/hooks/llm-wiki-post-edit.sh'", "timeout": 90}]}],
+  "Stop":        [{"hooks": [{"type": "command", "command": "bash '/home/you/.claude/hooks/llm-wiki-stop.sh'", "timeout": 90}]}]
+}
+```
+
+- **post-edit** runs after every Edit or Write. If the file is a vault page it runs `wiki reindex` (incremental, about 0.1 s), lints, and hands the agent any broken link or missing `projects:` on that page as extra context. It also records the path for the Stop hook. Edits outside the vault cost one JSON parse.
+- **stop** runs when the agent finishes a turn. If pages this session edited are uncommitted or carry lint defects, it blocks the stop once with the list, so the agent commits with `wiki commit` or explains. It checks only this session's pages (other sessions share the tree), never fires twice in a session, and stands down when Claude is already continuing from a Stop hook.
+
+Both are deterministic bookkeeping; the judgment stays in the skill.
+
 ## Memory vs vault
 
 Claude Code has its own auto-memory for facts about you: preferences, how you like to work. Keep that small. Domain knowledge goes in the vault. The skill states this split so the agent does not file a vendor quirk in memory or your code-style preference in the vault.

@@ -56,3 +56,27 @@ Trigger: a fresh session is asked "do you have anything in memory to save?"
 The honest answer is no: a new session has zero memory of the old one. What it has is the log. It reads the tail of the newest shard to find the last recorded date, runs the commit scan since that date, reports the gap, and asks the user for what commits cannot carry: decisions, conversations, findings. Then it ingests normally.
 
 This is why the log is append-only, one line per action, and dated. It is the only artifact that survives every failure mode.
+
+## Librarian (optional, unattended)
+
+A nightly maintenance agent that does the mechanical half of a lint without a human in the loop and leaves the judgment calls in a report. `librarian/` holds a container image (Claude Code in print mode plus the `wiki` CLI and the skill), an in-container runner, the prompt, and a host-side cron script.
+
+Each run: fetch the vault into the container's own clone, branch `agent/librarian-<date>` off the default branch, `wiki lint`, then Claude fixes unambiguous broken links, missing `projects:` and orphans, merges stub duplicates, lists contradictions and everything it was unsure about, commits with `wiki commit` under its own git identity, and the runner pushes the branch. You merge it from your machine when you have read the diff. It never touches `master`, never pushes from inside the agent, never fetches URLs, and runs with `WIKI_NO_EMBED=1` (lexical search only).
+
+Setup on the host that will run it (any Docker host; the image is bullseye-based so it also runs on old ARM boards):
+
+```bash
+docker build -f librarian/Dockerfile -t llm-wiki-librarian .     # from the repo root
+mkdir -p ~/librarian/secrets && cp librarian/host-run.sh ~/librarian/
+ssh-keygen -t ed25519 -N '' -f ~/librarian/secrets/deploy_key -C librarian
+# add secrets/deploy_key.pub to the vault repo as a deploy key WITH write access
+cat > ~/librarian/env <<ENV
+VAULT_REPO=git@github.com:you/your-vault.git
+CLAUDE_CODE_OAUTH_TOKEN=...        # from `claude setup-token`, or ANTHROPIC_API_KEY=...
+LIBRARIAN_MODEL=claude-sonnet-5-5
+ENV
+~/librarian/host-run.sh                     # first run by hand; logs in ~/librarian/logs/
+crontab -e    # 0 2 * * * $HOME/librarian/host-run.sh
+```
+
+The vault needs a registry page `agents/librarian.md` (see the schema's Agent type), and the schema's agent write policy needs the one exception the librarian is: it may edit pages it did not write, because every edit lands on a branch the owner merges.
