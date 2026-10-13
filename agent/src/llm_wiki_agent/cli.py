@@ -253,7 +253,14 @@ def cmd_commit(vault: Path, message: str, paths: list[str]) -> int:
     lock_path = git_dir(vault) / "llm-wiki-commit.lock"
     with _commit_lock(lock_path):
         ensure_git_identity(vault)
-        git(vault, "add", "--", *paths)
+        # Stage only what git can still see: paths on disk or in the index. A path
+        # that `git mv` or `git rm` already took out of both (a rename's old name)
+        # is skipped here and reaches `git commit`'s pathspec below, which records
+        # the deletion from HEAD. `-A` is limited to these paths, never the tree.
+        tracked = set(git(vault, "ls-files", "-z", "--", *paths, quiet=True).stdout.split("\0"))
+        stageable = [p for p in paths if (vault / p).exists() or p in tracked]
+        if stageable:
+            git(vault, "add", "-A", "--", *stageable)
         delay = 0.25
         for attempt in range(COMMIT_RETRIES):
             done = git(vault, "commit", "-q", "-m", message, "--", *paths, check=False, quiet=True)

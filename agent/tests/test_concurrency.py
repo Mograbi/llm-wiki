@@ -164,3 +164,25 @@ def test_parallel_commits_from_threads_all_land(git_vault):
     assert results == [0, 0, 0, 0]
     assert len(git_out(git_vault, "log", "--format=%h").split()) == 5   # base + 4
     assert git_out(git_vault, "status", "--porcelain") == ""
+
+
+def test_commit_records_a_rename_and_a_deletion_given_by_path(git_vault):
+    subprocess.run(["git", "mv", "queries/device-relay-auto-login.md", "queries/relay-auto-login.md"],
+                   cwd=git_vault, check=True)
+    (git_vault / "entities" / "control-service.md").unlink()
+    assert cli.cmd_commit(git_vault, "rename + delete",
+                          ["queries/device-relay-auto-login.md", "queries/relay-auto-login.md",
+                           "entities/control-service.md"]) == 0
+    assert git_out(git_vault, "status", "--porcelain") == ""
+    names = git_out(git_vault, "show", "--name-status", "--format=", "HEAD")
+    assert "relay-auto-login.md" in names and "control-service.md" in names
+
+
+def test_commit_with_paths_never_sweeps_in_other_changes(git_vault):
+    """-A is limited to the given pathspecs: another session's new page stays out."""
+    (git_vault / "entities" / "other-session.md").write_text("---\ntype: entity\n---\n# o\n", encoding="utf-8")
+    page = git_vault / "entities" / "edge-gateway.md"
+    page.write_text(page.read_text() + "\nmine\n", encoding="utf-8")
+    assert cli.cmd_commit(git_vault, "mine", ["entities/edge-gateway.md"]) == 0
+    assert git_out(git_vault, "show", "--name-only", "--format=", "HEAD").split() == ["entities/edge-gateway.md"]
+    assert "other-session.md" in git_out(git_vault, "status", "--porcelain")
