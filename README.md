@@ -130,7 +130,21 @@ wiki search "question" [-k 8] [--project TAG] [--json] [--sync]
 wiki reindex [--full]      # regenerate _meta/index.md; refresh embeddings if Ollama is up
 wiki init                  # migrate an existing vault: git init, shard the log, generate the index
 wiki lint [--json] [--stale-days N]   # mechanical checks: orphans, broken wikilinks, missing projects, stale-active (default 180 days); exit 1 if any. Model-free, always current
+wiki commit -m MSG -- PATHS  # stage + commit explicit paths under a lock shared by every session; retries a foreign index.lock
 ```
+
+`wiki reindex` writes three generated, gitignored things: `_meta/index.md` (an overview: counts by type and project, the hubs), `_meta/index/<type>.md` (one line per page: title, first sentence, projects, inbound links) and `_meta/hot.md` (the last week of log lines and touched pages). The agent reads `hot.md` once per session and a shard only when it cannot use `wiki search`; it never reads a 700-line catalog.
+
+### Several sessions, one vault
+
+Agent sessions run in parallel on the same working tree, and unattended agents push branches. What keeps that from corrupting anything:
+
+- The sqlite index is WAL mode with a busy timeout, and a build does all its parsing and embedding before one short write transaction.
+- Generated pages are written atomically (temp file + rename) and are not under git, so two sessions never commit each other's index.
+- `wiki commit` serializes commits behind a lock in `.git/` and retries when another git process holds `index.lock`.
+- The skill tells the agent to make small anchored edits, to re-read and re-apply on "modified since read", and to commit only its own paths.
+- Optional Claude Code hooks (`hooks/`) reindex and lint after every vault edit and, at Stop, remind the agent of pages it edited but did not commit.
+- An optional nightly **librarian** (`librarian/`) runs Claude Code in a container against its own clone, fixes mechanical lint, and pushes an `agent/librarian-<date>` branch for you to merge. See [docs/workflows.md](docs/workflows.md).
 
 `wiki search` is a finder, not an oracle. It returns pages for the agent to read; there is no model in the loop, so there is nothing to hallucinate. It always runs a full-text ranker (SQLite FTS5, BM25, stemming, title weighted). With Ollama it also ranks by cosine over section-level embeddings and fuses the two lists by reciprocal rank, with each ranker's first choice guaranteed a top-3 slot, so a page both rankers like rises to the top and a rare exact token still surfaces when only full-text search can see it. The first line of its output says which mode ran (`hybrid`, `semantic`, or `lexical`) and whether coverage is partial.
 
