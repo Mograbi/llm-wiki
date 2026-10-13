@@ -1,0 +1,2 @@
+# log shards are append-only: when two writers append, keep both sides instead of conflicting
+_meta/log/*.md merge=union
