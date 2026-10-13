@@ -99,10 +99,7 @@ if [ "$CLI_OK" = 1 ]; then
   if [ "$FRESH_VAULT" = 1 ]; then
     if "$BIN_DIR/wiki" reindex >/dev/null; then
       say "index: _meta/index.md generated"
-      if command -v git >/dev/null 2>&1 && [ -d "$VAULT/.git" ]; then
-        git -C "$VAULT" add -- _meta/index.md
-        git -C "$VAULT" commit -qm "vault: generated index" -- _meta/index.md || true
-      fi
+      # generated pages (_meta/index.md, _meta/index/, _meta/hot.md) are gitignored by the template
     else
       warn "index: build failed — run 'wiki reindex' to see the error"
     fi
@@ -121,7 +118,20 @@ else
   say "claude code: skill linked at ~/.claude/skills/llm-wiki (invoke with /llm-wiki)"
 fi
 
-# 5. Cursor -----------------------------------------------------------------
+# 5. Claude Code hooks (optional, deterministic bookkeeping) ------------------
+mkdir -p -- "$HOME/.claude/hooks"
+ln -sfn -- "$REPO/hooks/post-edit.sh" "$HOME/.claude/hooks/llm-wiki-post-edit.sh"
+ln -sfn -- "$REPO/hooks/stop.sh" "$HOME/.claude/hooks/llm-wiki-stop.sh"
+say "claude code: hooks linked into ~/.claude/hooks/ — enable them by adding this to ~/.claude/settings.json (see docs/claude-code.md):"
+cat <<SNIP
+  "hooks": {
+    "PostToolUse": [{"matcher": "Edit|Write|MultiEdit",
+                     "hooks": [{"type": "command", "command": "bash '$HOME/.claude/hooks/llm-wiki-post-edit.sh'", "timeout": 90}]}],
+    "Stop":        [{"hooks": [{"type": "command", "command": "bash '$HOME/.claude/hooks/llm-wiki-stop.sh'", "timeout": 90}]}]
+  }
+SNIP
+
+# 6. Cursor -----------------------------------------------------------------
 say "cursor: copy $REPO/cursor/llm-wiki.mdc into <your-project>/.cursor/rules/ (see docs/cursor.md)"
 
 cat <<MSG
