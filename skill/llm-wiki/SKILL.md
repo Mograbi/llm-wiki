@@ -1,11 +1,19 @@
 ---
 name: llm-wiki
-description: Persistent knowledge base (Karpathy's "LLM Wiki" pattern) maintained in a local markdown vault. Use when the user asks to ingest, save, remember, look up, synthesize, log, or lint knowledge, or references their wiki/vault. Three workflows - ingest (new sources), query (search + synthesize), lint (health-check).
+description: Persistent knowledge base (Karpathy's "LLM Wiki" pattern) maintained in a local markdown vault ~/wiki. The ONLY knowledge base for personal / private projects (family IT and the family business e.g. Hashavshevet, Hermes/Sanad, Maa'mon, SuraPlus, Tamrini, Automati, raspi-5, maui, cytopia, and anything else that is not Lumana work) - for those, read from and write to the vault directly, without asking; never use kb. Use when the user asks to ingest, save, remember, look up, synthesize, log, or lint knowledge, or references their wiki/vault. Three workflows - ingest (new sources), query (search + synthesize), lint (health-check).
 ---
 
 # LLM Wiki
 
 A persistent markdown vault the user maintains solely through you. Treat it as a long-lived second brain: content persists across conversations, so everything you write must be legible to a future you with no context.
+
+## Scope: personal projects live here, Lumana lives in kb
+
+Two knowledge bases exist. Route by topic, not by the words the user used ("save", "remember", "ingest" apply to both):
+
+- **Personal / private projects → this vault, always.** Family IT help and the family business (project tag `family`), Hermes/Sanad, Maa'mon, SuraPlus, Tamrini, Automati, raspi-5, maui, cytopia, career or self-reflection notes, and anything else not done for Lumana. The authoritative list is the private-projects line in `_meta/schema.md`. These are **never** frozen: read, ingest, update, log and commit them here without asking for permission, and never look them up in or write them to kb (kb is on company hardware, visible to teammates).
+- **Lumana work → the kb skill.** The vault is frozen for Lumana content since 2026-10-17 (see `FROZEN.md`); reading it for history is fine, writing Lumana pages here is not.
+- Mixed or unclear topic: ask one short question before writing. Never silently drop a personal-project update because the kb skill also matched.
 
 ## Vault path
 
